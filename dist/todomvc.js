@@ -3109,20 +3109,17 @@ exports.default = TodoApp;
 },{"../redux/actions/todo-app":4,"../redux/store":6}],3:[function(_dereq_,module,exports){
 'use strict';
 
+_dereq_('./util/diffhtml');
+
 var _todoApp = _dereq_('./components/todo-app');
 
 var _todoApp2 = _interopRequireDefault(_todoApp);
 
-var _diffhtml = _dereq_('diffhtml');
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-// Support older browsers (Custom Elements polyfill and element extensions).
-(0, _diffhtml.enableProllyfill)();
 
 document.registerElement('todo-app', _todoApp2.default);
 
-},{"./components/todo-app":2,"diffhtml":1}],4:[function(_dereq_,module,exports){
+},{"./components/todo-app":2,"./util/diffhtml":7}],4:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3360,7 +3357,15 @@ exports.default = createStoreWithMiddleware((0, _redux.combineReducers)({
   }
 }), {});
 
-},{"./reducers/todo-app":5,"redux":13,"redux-logger":7}],7:[function(_dereq_,module,exports){
+},{"./reducers/todo-app":5,"redux":14,"redux-logger":8}],7:[function(_dereq_,module,exports){
+'use strict';
+
+var _diffhtml = _dereq_('diffhtml');
+
+// Support older browsers (Custom Elements polyfill and element extensions).
+(0, _diffhtml.enableProllyfill)();
+
+},{"diffhtml":1}],8:[function(_dereq_,module,exports){
 "use strict";
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
@@ -3589,7 +3594,7 @@ function createLogger() {
 }
 
 module.exports = createLogger;
-},{}],8:[function(_dereq_,module,exports){
+},{}],9:[function(_dereq_,module,exports){
 'use strict';
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
@@ -3647,7 +3652,7 @@ function applyMiddleware() {
     };
   };
 }
-},{"./compose":11}],9:[function(_dereq_,module,exports){
+},{"./compose":12}],10:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3699,7 +3704,7 @@ function bindActionCreators(actionCreators, dispatch) {
   }
   return boundActionCreators;
 }
-},{}],10:[function(_dereq_,module,exports){
+},{}],11:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3827,7 +3832,7 @@ function combineReducers(reducers) {
     return hasChanged ? nextState : state;
   };
 }
-},{"./createStore":12,"./utils/warning":14,"lodash/isPlainObject":18}],11:[function(_dereq_,module,exports){
+},{"./createStore":13,"./utils/warning":15,"lodash/isPlainObject":19}],12:[function(_dereq_,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -3857,7 +3862,7 @@ function compose() {
     }, last.apply(undefined, arguments));
   };
 }
-},{}],12:[function(_dereq_,module,exports){
+},{}],13:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4074,7 +4079,7 @@ function createStore(reducer, initialState, enhancer) {
     replaceReducer: replaceReducer
   };
 }
-},{"lodash/isPlainObject":18}],13:[function(_dereq_,module,exports){
+},{"lodash/isPlainObject":19}],14:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4121,7 +4126,7 @@ exports.combineReducers = _combineReducers2["default"];
 exports.bindActionCreators = _bindActionCreators2["default"];
 exports.applyMiddleware = _applyMiddleware2["default"];
 exports.compose = _compose2["default"];
-},{"./applyMiddleware":8,"./bindActionCreators":9,"./combineReducers":10,"./compose":11,"./createStore":12,"./utils/warning":14}],14:[function(_dereq_,module,exports){
+},{"./applyMiddleware":9,"./bindActionCreators":10,"./combineReducers":11,"./compose":12,"./createStore":13,"./utils/warning":15}],15:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4146,7 +4151,7 @@ function warning(message) {
   } catch (e) {}
   /* eslint-enable no-empty */
 }
-},{}],15:[function(_dereq_,module,exports){
+},{}],16:[function(_dereq_,module,exports){
 /* Built-in method references for those with the same name as other `lodash` methods. */
 var nativeGetPrototype = Object.getPrototypeOf;
 
@@ -4163,7 +4168,7 @@ function getPrototype(value) {
 
 module.exports = getPrototype;
 
-},{}],16:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 /**
  * Checks if `value` is a host object in IE < 9.
  *
@@ -4185,7 +4190,7 @@ function isHostObject(value) {
 
 module.exports = isHostObject;
 
-},{}],17:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 /**
  * Checks if `value` is object-like. A value is object-like if it's not `null`
  * and has a `typeof` result of "object".
@@ -4216,7 +4221,7 @@ function isObjectLike(value) {
 
 module.exports = isObjectLike;
 
-},{}],18:[function(_dereq_,module,exports){
+},{}],19:[function(_dereq_,module,exports){
 var getPrototype = _dereq_('./_getPrototype'),
     isHostObject = _dereq_('./_isHostObject'),
     isObjectLike = _dereq_('./isObjectLike');
@@ -4287,4 +4292,4 @@ function isPlainObject(value) {
 
 module.exports = isPlainObject;
 
-},{"./_getPrototype":15,"./_isHostObject":16,"./isObjectLike":17}]},{},[3]);
+},{"./_getPrototype":16,"./_isHostObject":17,"./isObjectLike":18}]},{},[3]);
