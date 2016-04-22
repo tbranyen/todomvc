@@ -3200,14 +3200,21 @@ var TodoApp = function (_HTMLElement) {
       _store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
     }
   }, {
+    key: 'getTodoClassNames',
+    value: function getTodoClassNames(todo) {
+      return [todo.completed ? 'completed' : '', todo.editing ? 'editing' : ''].filter(Boolean).join(' ');
+    }
+  }, {
     key: 'render',
     value: function render() {
+      var _this5 = this;
+
       var todoApp = _store2.default.getState()[this.dataset.reducer];
 
       localStorage['diffhtml-todos'] = JSON.stringify(todoApp.todos);
 
       this.diffInnerHTML = '\n      <section class="todoapp">\n        <header class="header">\n          <h1>todos</h1>\n\n          <form class="add-todo">\n            <input\n              class="new-todo"\n              placeholder="What needs to be done?"\n              autofocus="">\n          </form>\n        </header>\n\n        ' + (todoApp.todos.length ? '\n          <section class="main">\n            <input class="toggle-all" type="checkbox">\n\n            <ul class="todo-list">\n              ' + todoApp.todos.map(function (todo) {
-        return '\n                <li class="' + (todo.completed ? 'completed' : '') + ' ' + (todo.editing ? 'editing' : '') + '">\n                  <div class="view">\n                    <input class="toggle" type="checkbox" ' + (todo.completed ? 'checked' : '') + '>\n                    <label>' + todo.title + '</label>\n                    <button class="destroy"></button>\n                  </div>\n\n                  <form class="edit-todo">\n                    <input value="' + todo.title + '" class="edit">\n                  </form>\n                </li>\n              ';
+        return '\n                <li class="' + _this5.getTodoClassNames(todo) + '">\n                  <div class="view">\n                    <input class="toggle" type="checkbox"\n                      ' + (todo.completed ? 'checked' : '') + '>\n\n                    <label>' + todo.title + '</label>\n                    <button class="destroy"></button>\n                  </div>\n\n                  <form class="edit-todo">\n                    <input value="' + todo.title + '" class="edit">\n                  </form>\n                </li>\n              ';
       }).join('\n') + '\n            </ul>\n          </section>\n\n          <footer class="footer">\n            <span class="todo-count">\n              <strong>' + todoApp.getRemaining().length + '</strong>\n              ' + (todoApp.getRemaining().length == 1 ? 'item' : 'items') + ' left\n            </span>\n\n            <button class="clear-completed">Clear completed</button>\n          </footer>\n        ' : '') + '\n      </section>\n    ';
     }
   }]);
