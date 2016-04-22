@@ -2947,6 +2947,8 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
+var NOP = function NOP() {};
+
 var TodoApp = function (_HTMLElement) {
   _inherits(TodoApp, _HTMLElement);
 
@@ -3010,21 +3012,21 @@ var TodoApp = function (_HTMLElement) {
           return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
         }).then(function () {
           element.style.opacity = 1;
-        });
+        }).then(NOP, NOP);
       }
 
       // Animate Todo item being added.
       if (element.matches('.todo-list li, footer.info')) {
         return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
-        });
+        }).then(NOP, NOP);
       }
 
       // Animate the entire app loading.
       if (element.matches('.todoapp')) {
         return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
-        });
+        }).then(NOP, NOP);
       }
     }
   }, {
@@ -3041,7 +3043,7 @@ var TodoApp = function (_HTMLElement) {
           return {
             v: new Promise(function (resolve) {
               return actualElement.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 250 }).onfinish = resolve;
-            })
+            }).then(NOP, NOP)
           };
         }();
 
