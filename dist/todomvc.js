@@ -3009,8 +3009,6 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
-
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
@@ -3033,6 +3031,9 @@ var TodoApp = function (_HTMLElement) {
 
       this.animateAttached = this.animateAttached.bind(this);
       this.animateDetached = this.animateDetached.bind(this);
+
+      // Necessary to track which elements were removed.
+      this._removedIndexes = [];
 
       document.addTransitionState('attached', this.animateAttached);
       document.addTransitionState('detached', this.animateDetached);
@@ -3073,14 +3074,14 @@ var TodoApp = function (_HTMLElement) {
       if (element.matches('.todo-list li')) {
         return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
-        }).then(function () {}, function () {});
+        });
       }
 
       // Animate the entire app loading.
       if (element.matches('.todoapp')) {
         return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
-        }).then(function () {}, function () {});
+        });
       }
     }
   }, {
@@ -3091,16 +3092,13 @@ var TodoApp = function (_HTMLElement) {
       // We are removing an item from the list.
       if (el.matches('.todo-list li')) {
         var _ret = function () {
-          var actualElement = [].concat(_toConsumableArray(_this3.querySelectorAll('.todo-list li')))[_this3._removedIndex];
-
-          var done = function done() {
-            _this3._removedIndex = null;
-          };
+          var rows = _this3.querySelectorAll('.todo-list li');
+          var actualElement = rows[_this3._removedIndexes.shift()];
 
           return {
             v: new Promise(function (resolve) {
               return actualElement.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 250 }).onfinish = resolve;
-            }).then(done, done)
+            })
           };
         }();
 
@@ -3130,7 +3128,7 @@ var TodoApp = function (_HTMLElement) {
       var li = ev.target.parentNode.parentNode;
       var index = Array.from(li.parentNode.children).indexOf(li);
 
-      this._removedIndex = index;
+      this._removedIndexes.push(index);
 
       _store2.default.dispatch(todoAppActions.removeTodo(index));
     }
@@ -3176,9 +3174,19 @@ var TodoApp = function (_HTMLElement) {
   }, {
     key: 'clearCompleted',
     value: function clearCompleted(ev) {
+      var _this4 = this;
+
       if (!ev.target.matches('.clear-completed')) {
         return;
       }
+
+      var todoApp = _store2.default.getState()[this.dataset.reducer];
+
+      todoApp.todos.forEach(function (todo, i) {
+        if (todo.completed === true) {
+          _this4._removedIndexes.push(i);
+        }
+      });
 
       _store2.default.dispatch(todoAppActions.clearCompleted());
     }
