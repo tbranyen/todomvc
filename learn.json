@@ -1773,7 +1773,7 @@
 	"reagent": {
 		"name": "Reagent",
 		"description": "Reagent provides a minimalistic interface between ClojureScript and React. It allows you to define efficient React components using nothing but plain ClojureScript functions and data, that describe your UI using a Hiccup-like syntax.",
-	    "homepage": "reagent-project.github.io/",
+			"homepage": "reagent-project.github.io/",
 		"examples": [{
 			"name": "Example",
 			"url": "examples/reagent"
@@ -1909,7 +1909,7 @@
 			}]
 		}]
 	},
-  	"scalajs-react": {
+		"scalajs-react": {
 		"name": "scalajs-react",
 		"description": "Facebook's React on Scala.js.",
 		"homepage": "github.com/japgolly/scalajs-react/",

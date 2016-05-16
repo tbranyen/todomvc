@@ -8,11 +8,11 @@ diffHTML to handle Virtual DOM operations.
 
 > diffHTML is an experimental library for building components and structuring applications with a virtual DOM and declarative HTML interface.
 
-> _[diffHTML - www.diffhtml.org](https://www.diffhtml.org/)_
+> _[diffHTML - www.diffhtml.org](http://www.diffhtml.org/)_
 
 ## Learning diffHTML
 
-The [diffHTML website](https://www.diffhtml.org) is a great resource for getting started.
+The [diffHTML website](http://www.diffhtml.org) is a great resource for getting started.
 
 Get help from diffHTML devs and users:
 

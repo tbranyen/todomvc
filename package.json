@@ -27,7 +27,7 @@
     "watchify": "^3.7.0"
   },
   "dependencies": {
-    "diffhtml": "^0.6.6",
+    "diffhtml": "^0.8.0",
     "redux": "^3.3.1",
     "redux-logger": "^2.6.1",
     "todomvc-app-css": "^2.0.4",
