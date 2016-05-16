@@ -2604,6 +2604,10 @@ var TodoApp = function (_HTMLElement) {
 	}, {
 		key: 'addTodo',
 		value: function addTodo(ev) {
+			if (!ev.target.matches('.add-todo')) {
+				return;
+			}
+
 			ev.preventDefault();
 
 			var newTodo = ev.target.querySelector('.new-todo');
@@ -2613,6 +2617,10 @@ var TodoApp = function (_HTMLElement) {
 	}, {
 		key: 'removeTodo',
 		value: function removeTodo(ev) {
+			if (!ev.target.matches('.destroy')) {
+				return;
+			}
+
 			var li = ev.target.parentNode.parentNode;
 			var index = Array.from(li.parentNode.children).indexOf(li);
 
@@ -2621,6 +2629,10 @@ var TodoApp = function (_HTMLElement) {
 	}, {
 		key: 'toggleCompletion',
 		value: function toggleCompletion(ev) {
+			if (!ev.target.matches('.toggle')) {
+				return;
+			}
+
 			var li = ev.target.parentNode.parentNode;
 			var index = Array.from(li.parentNode.children).indexOf(li);
 
@@ -2629,6 +2641,10 @@ var TodoApp = function (_HTMLElement) {
 	}, {
 		key: 'startEditing',
 		value: function startEditing(ev) {
+			if (!ev.target.matches('label')) {
+				return;
+			}
+
 			var li = ev.target.parentNode.parentNode;
 			var index = Array.from(li.parentNode.children).indexOf(li);
 
@@ -2654,11 +2670,19 @@ var TodoApp = function (_HTMLElement) {
 	}, {
 		key: 'clearCompleted',
 		value: function clearCompleted(ev) {
+			if (!ev.target.matches('.clear-completed')) {
+				return;
+			}
+
 			_store2.default.dispatch(todoAppActions.clearCompleted());
 		}
 	}, {
 		key: 'toggleAll',
 		value: function toggleAll(ev) {
+			if (!ev.target.matches('.toggle-all')) {
+				return;
+			}
+
 			_store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
 		}
 	}, {
