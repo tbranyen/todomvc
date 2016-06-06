@@ -2,7 +2,7 @@
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
-	value: true
+  value: true
 });
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -36,254 +36,248 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 var html = diff.html;
 var innerHTML = diff.innerHTML;
 
-// Used to silence errors produced by missing Web Animations API support in the
-// transition promises below.
-
-var warnAboutWebAnim = function warnAboutWebAnim() {
-	return console.info('No Web Animations API support');
-};
-
 // Allow diffHTML transitions to be bound inside the tagged helper.
+
 (0, _diffhtmlInlineTransitions2.default)(diff);
 
 var TodoApp = function () {
-	_createClass(TodoApp, null, [{
-		key: 'create',
-		value: function create(mount) {
-			return new TodoApp(mount);
-		}
-	}]);
+  _createClass(TodoApp, null, [{
+    key: 'create',
+    value: function create(mount) {
+      return new TodoApp(mount);
+    }
+  }]);
 
-	function TodoApp(mount) {
-		var _this = this;
+  function TodoApp(mount) {
+    var _this = this;
 
-		_classCallCheck(this, TodoApp);
+    _classCallCheck(this, TodoApp);
 
-		this.mount = mount;
-		this.existingFooter = this.mount.querySelector('footer').cloneNode(true);
-		this.unsubscribeStore = _store2.default.subscribe(function () {
-			return _this.render();
-		});
+    this.mount = mount;
+    this.existingFooter = this.mount.querySelector('footer').cloneNode(true);
+    this.unsubscribeStore = _store2.default.subscribe(function () {
+      return _this.render();
+    });
 
-		this.render();
-	}
+    this.render();
+  }
 
-	_createClass(TodoApp, [{
-		key: 'animateAttached',
-		value: function animateAttached(parent, element) {
-			if (!element.animate) {
-				return;
-			}
+  _createClass(TodoApp, [{
+    key: 'animateAttached',
+    value: function animateAttached(parent, element) {
+      if (!element.animate) {
+        return;
+      }
 
-			if (element.matches('footer.info')) {
-				new Promise(function (resolve) {
-					return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
-				}).then(function () {
-					element.style.opacity = 1;
-				});
-			}
+      if (element.matches('footer.info')) {
+        new Promise(function (resolve) {
+          return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
+        }).then(function () {
+          element.style.opacity = 1;
+        });
+      }
 
-			// Animate Todo item being added.
-			if (element.matches('.todo-list li, footer.info')) {
-				new Promise(function (resolve) {
-					return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
-				});
-			}
+      // Animate Todo item being added.
+      if (element.matches('.todo-list li, footer.info')) {
+        new Promise(function (resolve) {
+          return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
+        });
+      }
 
-			// Animate the entire app loading.
-			if (element.matches('.todoapp')) {
-				new Promise(function (resolve) {
-					return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
-				});
-			}
-		}
-	}, {
-		key: 'animateDetached',
-		value: function animateDetached(parent, element) {
-			if (!element.animate) {
-				return;
-			}
+      // Animate the entire app loading.
+      if (element.matches('.todoapp')) {
+        new Promise(function (resolve) {
+          return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
+        });
+      }
+    }
+  }, {
+    key: 'animateDetached',
+    value: function animateDetached(parent, element) {
+      if (!element.animate) {
+        return;
+      }
 
-			// We are removing an item from the list.
-			if (element.matches('.todo-list li')) {
-				return new Promise(function (resolve) {
-					return element.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 250 }).onfinish = resolve;
-				});
-			}
-		}
-	}, {
-		key: 'addTodo',
-		value: function addTodo(ev) {
-			if (!ev.target.matches('.add-todo')) {
-				return;
-			}
+      // We are removing an item from the list.
+      if (element.matches('.todo-list li')) {
+        return new Promise(function (resolve) {
+          return element.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 250 }).onfinish = resolve;
+        });
+      }
+    }
+  }, {
+    key: 'addTodo',
+    value: function addTodo(ev) {
+      if (!ev.target.matches('.add-todo')) {
+        return;
+      }
 
-			ev.preventDefault();
+      ev.preventDefault();
 
-			var newTodo = ev.target.querySelector('.new-todo');
-			_store2.default.dispatch(todoAppActions.addTodo(newTodo.value));
-			newTodo.value = '';
-		}
-	}, {
-		key: 'removeTodo',
-		value: function removeTodo(ev) {
-			if (!ev.target.matches('.destroy')) {
-				return;
-			}
+      var newTodo = ev.target.querySelector('.new-todo');
+      _store2.default.dispatch(todoAppActions.addTodo(newTodo.value));
+      newTodo.value = '';
+    }
+  }, {
+    key: 'removeTodo',
+    value: function removeTodo(ev) {
+      if (!ev.target.matches('.destroy')) {
+        return;
+      }
 
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
+      var li = ev.target.parentNode.parentNode;
+      var index = Array.from(li.parentNode.children).indexOf(li);
 
-			_store2.default.dispatch(todoAppActions.removeTodo(index));
-		}
-	}, {
-		key: 'toggleCompletion',
-		value: function toggleCompletion(ev) {
-			if (!ev.target.matches('.toggle')) {
-				return;
-			}
+      _store2.default.dispatch(todoAppActions.removeTodo(index));
+    }
+  }, {
+    key: 'toggleCompletion',
+    value: function toggleCompletion(ev) {
+      if (!ev.target.matches('.toggle')) {
+        return;
+      }
 
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
+      var li = ev.target.parentNode.parentNode;
+      var index = Array.from(li.parentNode.children).indexOf(li);
 
-			_store2.default.dispatch(todoAppActions.toggleCompletion(index, ev.target.checked));
-		}
-	}, {
-		key: 'startEditing',
-		value: function startEditing(ev) {
-			if (!ev.target.matches('label')) {
-				return;
-			}
+      _store2.default.dispatch(todoAppActions.toggleCompletion(index, ev.target.checked));
+    }
+  }, {
+    key: 'startEditing',
+    value: function startEditing(ev) {
+      if (!ev.target.matches('label')) {
+        return;
+      }
 
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
+      var li = ev.target.parentNode.parentNode;
+      var index = Array.from(li.parentNode.children).indexOf(li);
 
-			_store2.default.dispatch(todoAppActions.startEditing(index));
+      _store2.default.dispatch(todoAppActions.startEditing(index));
 
-			li.querySelector('form input').focus();
-		}
-	}, {
-		key: 'stopEditing',
-		value: function stopEditing(ev) {
-			ev.preventDefault();
+      li.querySelector('form input').focus();
+    }
+  }, {
+    key: 'stopEditing',
+    value: function stopEditing(ev) {
+      ev.preventDefault();
 
-			var parentNode = ev.target.parentNode;
-			var nodeName = parentNode.nodeName.toLowerCase();
-			var li = nodeName === 'li' ? parentNode : parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-			var editTodo = li.querySelector('.edit');
-			var text = editTodo.value.trim();
+      var parentNode = ev.target.parentNode;
+      var nodeName = parentNode.nodeName.toLowerCase();
+      var li = nodeName === 'li' ? parentNode : parentNode.parentNode;
+      var index = Array.from(li.parentNode.children).indexOf(li);
+      var editTodo = li.querySelector('.edit');
+      var text = editTodo.value.trim();
 
-			if (text) {
-				_store2.default.dispatch(todoAppActions.stopEditing(index, text));
-			} else {
-				_store2.default.dispatch(todoAppActions.removeTodo(index));
-			}
-		}
-	}, {
-		key: 'clearCompleted',
-		value: function clearCompleted(ev) {
-			if (!ev.target.matches('.clear-completed')) {
-				return;
-			}
+      if (text) {
+        _store2.default.dispatch(todoAppActions.stopEditing(index, text));
+      } else {
+        _store2.default.dispatch(todoAppActions.removeTodo(index));
+      }
+    }
+  }, {
+    key: 'clearCompleted',
+    value: function clearCompleted(ev) {
+      if (!ev.target.matches('.clear-completed')) {
+        return;
+      }
 
-			_store2.default.dispatch(todoAppActions.clearCompleted());
-		}
-	}, {
-		key: 'toggleAll',
-		value: function toggleAll(ev) {
-			if (!ev.target.matches('.toggle-all')) {
-				return;
-			}
+      _store2.default.dispatch(todoAppActions.clearCompleted());
+    }
+  }, {
+    key: 'toggleAll',
+    value: function toggleAll(ev) {
+      if (!ev.target.matches('.toggle-all')) {
+        return;
+      }
 
-			_store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
-		}
-	}, {
-		key: 'handleKeyDown',
-		value: function handleKeyDown(ev) {
-			if (!ev.target.matches('.edit')) {
-				return;
-			}
+      _store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
+    }
+  }, {
+    key: 'handleKeyDown',
+    value: function handleKeyDown(ev) {
+      if (!ev.target.matches('.edit')) {
+        return;
+      }
 
-			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
+      var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
 
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
+      var li = ev.target.parentNode.parentNode;
+      var index = Array.from(li.parentNode.children).indexOf(li);
 
-			switch (ev.keyCode) {
-				case 27:
-					{
-						ev.target.value = todoApp.todos[index].title;
-						this.stopEditing(ev);
-					}
-			}
-		}
-	}, {
-		key: 'getTodoClassNames',
-		value: function getTodoClassNames(todo) {
-			return [todo.completed ? 'completed' : '', todo.editing ? 'editing' : ''].filter(Boolean).join(' ');
-		}
-	}, {
-		key: 'setCheckedState',
-		value: function setCheckedState() {
-			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
-			var notChecked = todoApp.todos.filter(function (todo) {
-				return !todo.completed;
-			}).length;
+      switch (ev.keyCode) {
+        case 27:
+          {
+            ev.target.value = todoApp.todos[index].title;
+            this.stopEditing(ev);
+          }
+      }
+    }
+  }, {
+    key: 'getTodoClassNames',
+    value: function getTodoClassNames(todo) {
+      return [todo.completed ? 'completed' : '', todo.editing ? 'editing' : ''].filter(Boolean).join(' ');
+    }
+  }, {
+    key: 'setCheckedState',
+    value: function setCheckedState() {
+      var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
+      var notChecked = todoApp.todos.filter(function (todo) {
+        return !todo.completed;
+      }).length;
 
-			return notChecked ? '' : 'checked';
-		}
-	}, {
-		key: 'onSubmitHandler',
-		value: function onSubmitHandler(ev) {
-			ev.preventDefault();
+      return notChecked ? '' : 'checked';
+    }
+  }, {
+    key: 'onSubmitHandler',
+    value: function onSubmitHandler(ev) {
+      ev.preventDefault();
 
-			if (ev.target.matches('.add-todo')) {
-				this.addTodo(ev);
-			} else if (ev.target.matches('.edit-todo')) {
-				this.stopEditing(ev);
-			}
-		}
-	}, {
-		key: 'onClickHandler',
-		value: function onClickHandler(ev) {
-			if (ev.target.matches('.destroy')) {
-				this.removeTodo(ev);
-			} else if (ev.target.matches('.toggle-all')) {
-				this.toggleAll(ev);
-			} else if (ev.target.matches('.clear-completed')) {
-				this.clearCompleted(ev);
-			}
-		}
-	}, {
-		key: 'getNavClass',
-		value: function getNavClass(name) {
-			var state = _store2.default.getState();
-			var path = state.url.path;
+      if (ev.target.matches('.add-todo')) {
+        this.addTodo(ev);
+      } else if (ev.target.matches('.edit-todo')) {
+        this.stopEditing(ev);
+      }
+    }
+  }, {
+    key: 'onClickHandler',
+    value: function onClickHandler(ev) {
+      if (ev.target.matches('.destroy')) {
+        this.removeTodo(ev);
+      } else if (ev.target.matches('.toggle-all')) {
+        this.toggleAll(ev);
+      } else if (ev.target.matches('.clear-completed')) {
+        this.clearCompleted(ev);
+      }
+    }
+  }, {
+    key: 'getNavClass',
+    value: function getNavClass(name) {
+      var state = _store2.default.getState();
+      var path = state.url.path;
 
-			return path === name ? 'selected' : undefined;
-		}
-	}, {
-		key: 'render',
-		value: function render() {
-			var state = _store2.default.getState();
-			var todoApp = state[this.mount.dataset.reducer];
-			var status = state.url.path.slice(1);
-			var allTodos = todoApp.todos;
-			var todos = todoApp.getByStatus(status);
-			var activeTodos = todoApp.getByStatus('active');
-			var completedTodos = todoApp.getByStatus('completed');
+      return path === name ? 'selected' : undefined;
+    }
+  }, {
+    key: 'render',
+    value: function render() {
+      var state = _store2.default.getState();
+      var todoApp = state[this.mount.dataset.reducer];
+      var status = state.url.path.slice(1);
+      var allTodos = todoApp.todos;
+      var todos = todoApp.getByStatus(status);
+      var activeTodos = todoApp.getByStatus('active');
+      var completedTodos = todoApp.getByStatus('completed');
 
-			localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
+      localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
 
-			innerHTML(this.mount, [diff.createElement("section", [diff.createAttribute("class", 'todoapp'), diff.createAttribute("attached", this.animateAttached), diff.createAttribute("detached", this.animateDetached), diff.createAttribute("onsubmit", this.onSubmitHandler.bind(this)), diff.createAttribute("onclick", this.onClickHandler.bind(this)), diff.createAttribute("onkeydown", this.handleKeyDown.bind(this)), diff.createAttribute("ondblclick", this.startEditing.bind(this)), diff.createAttribute("onchange", this.toggleCompletion.bind(this))], [diff.createElement('#text', null, "\n\n\t\t\t\t"), diff.createElement("header", [diff.createAttribute("class", 'header')], [diff.createElement('#text', null, "\n\t\t\t\t\t"), diff.createElement("h1", [], [diff.createElement('#text', null, "todos")]), diff.createElement('#text', null, "\n\n\t\t\t\t\t"), diff.createElement("form", [diff.createAttribute("class", 'add-todo')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("input", [diff.createAttribute("class", 'new-todo'), diff.createAttribute("placeholder", 'What needs to be done?'), diff.createAttribute("autofocus", '')], []), diff.createElement('#text', null, "\n\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t")]), diff.createElement('', null, allTodos.length ? [diff.createElement("section", [diff.createAttribute("class", 'main')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("input", [diff.createAttribute("class", 'toggle-all'), diff.createAttribute("type", 'checkbox'), diff.createAttribute(this.setCheckedState(), this.setCheckedState())], []), diff.createElement('#text', null, "\n\n\t\t\t\t\t\t"), diff.createElement("ul", [diff.createAttribute("class", 'todo-list')], [diff.createElement('', null, _todoList2.default.call(this, {
-				stopEditing: this.stopEditing.bind(this),
-				todos: todos
-			}))]), diff.createElement('#text', null, "\n\t\t\t\t\t")]), diff.createElement('#text', null, "\n\n\t\t\t\t\t"), diff.createElement("footer", [diff.createAttribute("class", 'footer')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("span", [diff.createAttribute("class", 'todo-count')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("strong", [], [diff.createElement('', null, activeTodos.length)]), diff.createElement('#text', null, '\n\t\t\t\t\t\t\t' + (activeTodos.length == 1 ? 'item' : 'items') + ' left\n\t\t\t\t\t\t')]), diff.createElement('#text', null, "\n\n\t\t\t\t\t\t"), diff.createElement("ul", [diff.createAttribute("class", 'filters')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/'), diff.createAttribute("class", this.getNavClass('/'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tAll\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/active'), diff.createAttribute("class", this.getNavClass('/active'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tActive\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/completed'), diff.createAttribute("class", this.getNavClass('/completed'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tCompleted\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t")]), diff.createElement('', null, completedTodos.length ? diff.createElement("button", [diff.createAttribute("class", 'clear-completed'), diff.createAttribute("onclick", this.clearCompleted.bind(this))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\tClear completed\n\t\t\t\t\t\t\t")]) : '')])] : '')]), diff.createElement('', null, this.existingFooter)]);
-		}
-	}]);
+      innerHTML(this.mount, [diff.createElement("section", [diff.createAttribute("class", 'todoapp'), diff.createAttribute("attached", this.animateAttached), diff.createAttribute("detached", this.animateDetached), diff.createAttribute("onsubmit", this.onSubmitHandler.bind(this)), diff.createAttribute("onclick", this.onClickHandler.bind(this)), diff.createAttribute("onkeydown", this.handleKeyDown.bind(this)), diff.createAttribute("ondblclick", this.startEditing.bind(this)), diff.createAttribute("onchange", this.toggleCompletion.bind(this))], [diff.createElement('#text', null, "\n\n        "), diff.createElement("header", [diff.createAttribute("class", 'header')], [diff.createElement('#text', null, "\n          "), diff.createElement("h1", [], [diff.createElement('#text', null, "todos")]), diff.createElement('#text', null, "\n\n          "), diff.createElement("form", [diff.createAttribute("class", 'add-todo')], [diff.createElement('#text', null, "\n            "), diff.createElement("input", [diff.createAttribute("class", 'new-todo'), diff.createAttribute("placeholder", 'What needs to be done?'), diff.createAttribute("autofocus", '')], []), diff.createElement('#text', null, "\n          ")]), diff.createElement('#text', null, "\n        ")]), diff.createElement('', null, allTodos.length ? [diff.createElement("section", [diff.createAttribute("class", 'main')], [diff.createElement('#text', null, "\n            "), diff.createElement("input", [diff.createAttribute("class", 'toggle-all'), diff.createAttribute("type", 'checkbox'), diff.createAttribute(this.setCheckedState(), this.setCheckedState())], []), diff.createElement('#text', null, "\n\n            "), diff.createElement("ul", [diff.createAttribute("class", 'todo-list')], [diff.createElement('', null, _todoList2.default.call(this, {
+        stopEditing: this.stopEditing.bind(this),
+        todos: todos
+      }))]), diff.createElement('#text', null, "\n          ")]), diff.createElement('#text', null, "\n\n          "), diff.createElement("footer", [diff.createAttribute("class", 'footer')], [diff.createElement('#text', null, "\n            "), diff.createElement("span", [diff.createAttribute("class", 'todo-count')], [diff.createElement('#text', null, "\n              "), diff.createElement("strong", [], [diff.createElement('', null, activeTodos.length)]), diff.createElement('#text', null, '\n              ' + (activeTodos.length == 1 ? 'item' : 'items') + ' left\n            ')]), diff.createElement('#text', null, "\n\n            "), diff.createElement("ul", [diff.createAttribute("class", 'filters')], [diff.createElement('#text', null, "\n              "), diff.createElement("li", [], [diff.createElement('#text', null, "\n                "), diff.createElement("a", [diff.createAttribute("href", '#/'), diff.createAttribute("class", this.getNavClass('/'))], [diff.createElement('#text', null, "\n                  All\n                ")]), diff.createElement('#text', null, "\n              ")]), diff.createElement('#text', null, "\n              "), diff.createElement("li", [], [diff.createElement('#text', null, "\n                "), diff.createElement("a", [diff.createAttribute("href", '#/active'), diff.createAttribute("class", this.getNavClass('/active'))], [diff.createElement('#text', null, "\n                  Active\n                ")]), diff.createElement('#text', null, "\n              ")]), diff.createElement('#text', null, "\n              "), diff.createElement("li", [], [diff.createElement('#text', null, "\n                "), diff.createElement("a", [diff.createAttribute("href", '#/completed'), diff.createAttribute("class", this.getNavClass('/completed'))], [diff.createElement('#text', null, "\n                  Completed\n                ")]), diff.createElement('#text', null, "\n              ")]), diff.createElement('#text', null, "\n            ")]), diff.createElement('', null, completedTodos.length ? diff.createElement("button", [diff.createAttribute("class", 'clear-completed'), diff.createAttribute("onclick", this.clearCompleted.bind(this))], [diff.createElement('#text', null, "\n                Clear completed\n              ")]) : '')])] : '')]), diff.createElement('', null, this.existingFooter)]);
+    }
+  }]);
 
-	return TodoApp;
+  return TodoApp;
 }();
 
 exports.default = TodoApp;
@@ -634,13 +628,14 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 // Makes a reusable function to create a store. Currently not exported, but
 // could be in the future for testing purposes.
-var createStoreWithMiddleware = (0, _redux.compose)()(
+var createStoreWithMiddleware = (0, _redux.compose)(
 // Adds in store middleware, such as async thunk and logging.
-//applyMiddleware(createLogger()),
+(0, _redux.applyMiddleware)((0, _reduxLogger2.default)()),
 
 // Hook devtools into our store.
-//window.devToolsExtension ? window.devToolsExtension() : f => f
-_redux.createStore);
+window.devToolsExtension ? window.devToolsExtension() : function (f) {
+	return f;
+})(_redux.createStore);
 
 // Compose the root reducer from modular reducers.
 exports.default = createStoreWithMiddleware((0, _redux.combineReducers)({
