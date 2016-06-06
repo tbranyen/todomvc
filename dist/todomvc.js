@@ -1,37 +1,730 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _diffhtml = _dereq_('diffhtml');
+
+var diff = _interopRequireWildcard(_diffhtml);
+
+var _diffhtmlInlineTransitions = _dereq_('diffhtml-inline-transitions');
+
+var _diffhtmlInlineTransitions2 = _interopRequireDefault(_diffhtmlInlineTransitions);
+
+var _store = _dereq_('../redux/store');
+
+var _store2 = _interopRequireDefault(_store);
+
+var _todoApp = _dereq_('../redux/actions/todo-app');
+
+var todoAppActions = _interopRequireWildcard(_todoApp);
+
+var _todoList = _dereq_('./todo-list');
+
+var _todoList2 = _interopRequireDefault(_todoList);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var html = diff.html;
+var innerHTML = diff.innerHTML;
+
+// Used to silence errors produced by missing Web Animations API support in the
+// transition promises below.
+
+var warnAboutWebAnim = function warnAboutWebAnim() {
+	return console.info('No Web Animations API support');
+};
+
+// Allow diffHTML transitions to be bound inside the tagged helper.
+(0, _diffhtmlInlineTransitions2.default)(diff);
+
+var TodoApp = function () {
+	_createClass(TodoApp, null, [{
+		key: 'create',
+		value: function create(mount) {
+			return new TodoApp(mount);
+		}
+	}]);
+
+	function TodoApp(mount) {
+		var _this = this;
+
+		_classCallCheck(this, TodoApp);
+
+		this.mount = mount;
+		this.existingFooter = this.mount.querySelector('footer').cloneNode(true);
+		this.unsubscribeStore = _store2.default.subscribe(function () {
+			return _this.render();
+		});
+
+		this.render();
+	}
+
+	_createClass(TodoApp, [{
+		key: 'animateAttached',
+		value: function animateAttached(parent, element) {
+			if (!element.animate) {
+				return;
+			}
+
+			if (element.matches('footer.info')) {
+				new Promise(function (resolve) {
+					return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
+				}).then(function () {
+					element.style.opacity = 1;
+				});
+			}
+
+			// Animate Todo item being added.
+			if (element.matches('.todo-list li, footer.info')) {
+				new Promise(function (resolve) {
+					return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
+				});
+			}
+
+			// Animate the entire app loading.
+			if (element.matches('.todoapp')) {
+				new Promise(function (resolve) {
+					return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
+				});
+			}
+		}
+	}, {
+		key: 'animateDetached',
+		value: function animateDetached(parent, element) {
+			if (!element.animate) {
+				return;
+			}
+
+			// We are removing an item from the list.
+			if (element.matches('.todo-list li')) {
+				return new Promise(function (resolve) {
+					return element.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.5)' }], { duration: 250 }).onfinish = resolve;
+				});
+			}
+		}
+	}, {
+		key: 'addTodo',
+		value: function addTodo(ev) {
+			if (!ev.target.matches('.add-todo')) {
+				return;
+			}
+
+			ev.preventDefault();
+
+			var newTodo = ev.target.querySelector('.new-todo');
+			_store2.default.dispatch(todoAppActions.addTodo(newTodo.value));
+			newTodo.value = '';
+		}
+	}, {
+		key: 'removeTodo',
+		value: function removeTodo(ev) {
+			if (!ev.target.matches('.destroy')) {
+				return;
+			}
+
+			var li = ev.target.parentNode.parentNode;
+			var index = Array.from(li.parentNode.children).indexOf(li);
+
+			_store2.default.dispatch(todoAppActions.removeTodo(index));
+		}
+	}, {
+		key: 'toggleCompletion',
+		value: function toggleCompletion(ev) {
+			if (!ev.target.matches('.toggle')) {
+				return;
+			}
+
+			var li = ev.target.parentNode.parentNode;
+			var index = Array.from(li.parentNode.children).indexOf(li);
+
+			_store2.default.dispatch(todoAppActions.toggleCompletion(index, ev.target.checked));
+		}
+	}, {
+		key: 'startEditing',
+		value: function startEditing(ev) {
+			if (!ev.target.matches('label')) {
+				return;
+			}
+
+			var li = ev.target.parentNode.parentNode;
+			var index = Array.from(li.parentNode.children).indexOf(li);
+
+			_store2.default.dispatch(todoAppActions.startEditing(index));
+
+			li.querySelector('form input').focus();
+		}
+	}, {
+		key: 'stopEditing',
+		value: function stopEditing(ev) {
+			ev.preventDefault();
+
+			var parentNode = ev.target.parentNode;
+			var nodeName = parentNode.nodeName.toLowerCase();
+			var li = nodeName === 'li' ? parentNode : parentNode.parentNode;
+			var index = Array.from(li.parentNode.children).indexOf(li);
+			var editTodo = li.querySelector('.edit');
+			var text = editTodo.value.trim();
+
+			if (text) {
+				_store2.default.dispatch(todoAppActions.stopEditing(index, text));
+			} else {
+				_store2.default.dispatch(todoAppActions.removeTodo(index));
+			}
+		}
+	}, {
+		key: 'clearCompleted',
+		value: function clearCompleted(ev) {
+			if (!ev.target.matches('.clear-completed')) {
+				return;
+			}
+
+			_store2.default.dispatch(todoAppActions.clearCompleted());
+		}
+	}, {
+		key: 'toggleAll',
+		value: function toggleAll(ev) {
+			if (!ev.target.matches('.toggle-all')) {
+				return;
+			}
+
+			_store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
+		}
+	}, {
+		key: 'handleKeyDown',
+		value: function handleKeyDown(ev) {
+			if (!ev.target.matches('.edit')) {
+				return;
+			}
+
+			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
+
+			var li = ev.target.parentNode.parentNode;
+			var index = Array.from(li.parentNode.children).indexOf(li);
+
+			switch (ev.keyCode) {
+				case 27:
+					{
+						ev.target.value = todoApp.todos[index].title;
+						this.stopEditing(ev);
+					}
+			}
+		}
+	}, {
+		key: 'getTodoClassNames',
+		value: function getTodoClassNames(todo) {
+			return [todo.completed ? 'completed' : '', todo.editing ? 'editing' : ''].filter(Boolean).join(' ');
+		}
+	}, {
+		key: 'setCheckedState',
+		value: function setCheckedState() {
+			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
+			var notChecked = todoApp.todos.filter(function (todo) {
+				return !todo.completed;
+			}).length;
+
+			return notChecked ? '' : 'checked';
+		}
+	}, {
+		key: 'onSubmitHandler',
+		value: function onSubmitHandler(ev) {
+			ev.preventDefault();
+
+			if (ev.target.matches('.add-todo')) {
+				this.addTodo(ev);
+			} else if (ev.target.matches('.edit-todo')) {
+				this.stopEditing(ev);
+			}
+		}
+	}, {
+		key: 'onClickHandler',
+		value: function onClickHandler(ev) {
+			if (ev.target.matches('.destroy')) {
+				this.removeTodo(ev);
+			} else if (ev.target.matches('.toggle-all')) {
+				this.toggleAll(ev);
+			} else if (ev.target.matches('.clear-completed')) {
+				this.clearCompleted(ev);
+			}
+		}
+	}, {
+		key: 'getNavClass',
+		value: function getNavClass(name) {
+			var state = _store2.default.getState();
+			var path = state.url.path;
+
+			return path === name ? 'selected' : undefined;
+		}
+	}, {
+		key: 'render',
+		value: function render() {
+			var state = _store2.default.getState();
+			var todoApp = state[this.mount.dataset.reducer];
+			var status = state.url.path.slice(1);
+			var allTodos = todoApp.todos;
+			var todos = todoApp.getByStatus(status);
+			var activeTodos = todoApp.getByStatus('active');
+			var completedTodos = todoApp.getByStatus('completed');
+
+			localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
+
+			innerHTML(this.mount, [diff.createElement("section", [diff.createAttribute("class", 'todoapp'), diff.createAttribute("attached", this.animateAttached), diff.createAttribute("detached", this.animateDetached), diff.createAttribute("onsubmit", this.onSubmitHandler.bind(this)), diff.createAttribute("onclick", this.onClickHandler.bind(this)), diff.createAttribute("onkeydown", this.handleKeyDown.bind(this)), diff.createAttribute("ondblclick", this.startEditing.bind(this)), diff.createAttribute("onchange", this.toggleCompletion.bind(this))], [diff.createElement('#text', null, "\n\n\t\t\t\t"), diff.createElement("header", [diff.createAttribute("class", 'header')], [diff.createElement('#text', null, "\n\t\t\t\t\t"), diff.createElement("h1", [], [diff.createElement('#text', null, "todos")]), diff.createElement('#text', null, "\n\n\t\t\t\t\t"), diff.createElement("form", [diff.createAttribute("class", 'add-todo')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("input", [diff.createAttribute("class", 'new-todo'), diff.createAttribute("placeholder", 'What needs to be done?'), diff.createAttribute("autofocus", '')], []), diff.createElement('#text', null, "\n\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t")]), diff.createElement('', null, allTodos.length ? [diff.createElement("section", [diff.createAttribute("class", 'main')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("input", [diff.createAttribute("class", 'toggle-all'), diff.createAttribute("type", 'checkbox'), diff.createAttribute(this.setCheckedState(), this.setCheckedState())], []), diff.createElement('#text', null, "\n\n\t\t\t\t\t\t"), diff.createElement("ul", [diff.createAttribute("class", 'todo-list')], [diff.createElement('', null, _todoList2.default.call(this, {
+				stopEditing: this.stopEditing.bind(this),
+				todos: todos
+			}))]), diff.createElement('#text', null, "\n\t\t\t\t\t")]), diff.createElement('#text', null, "\n\n\t\t\t\t\t"), diff.createElement("footer", [diff.createAttribute("class", 'footer')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t"), diff.createElement("span", [diff.createAttribute("class", 'todo-count')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("strong", [], [diff.createElement('', null, activeTodos.length)]), diff.createElement('#text', null, '\n\t\t\t\t\t\t\t' + (activeTodos.length == 1 ? 'item' : 'items') + ' left\n\t\t\t\t\t\t')]), diff.createElement('#text', null, "\n\n\t\t\t\t\t\t"), diff.createElement("ul", [diff.createAttribute("class", 'filters')], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/'), diff.createAttribute("class", this.getNavClass('/'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tAll\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/active'), diff.createAttribute("class", this.getNavClass('/active'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tActive\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t"), diff.createElement("li", [], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t"), diff.createElement("a", [diff.createAttribute("href", '#/completed'), diff.createAttribute("class", this.getNavClass('/completed'))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\t\tCompleted\n\t\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t\t")]), diff.createElement('#text', null, "\n\t\t\t\t\t\t")]), diff.createElement('', null, completedTodos.length ? diff.createElement("button", [diff.createAttribute("class", 'clear-completed'), diff.createAttribute("onclick", this.clearCompleted.bind(this))], [diff.createElement('#text', null, "\n\t\t\t\t\t\t\t\tClear completed\n\t\t\t\t\t\t\t")]) : '')])] : '')]), diff.createElement('', null, this.existingFooter)]);
+		}
+	}]);
+
+	return TodoApp;
+}();
+
+exports.default = TodoApp;
+
+},{"../redux/actions/todo-app":4,"../redux/store":8,"./todo-list":2,"diffhtml":10,"diffhtml-inline-transitions":9}],2:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.default = renderTodoList;
+
+var _diffhtml = _dereq_('diffhtml');
+
+var diff = _interopRequireWildcard(_diffhtml);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+var html = diff.html;
+var innerHTML = diff.innerHTML;
+
+
+function encode(str) {
+	return str.replace(/["&'<>`]/g, function (match) {
+		return '&#' + match.charCodeAt(0) + ';';
+	});
+}
+
+function renderTodoList(props) {
+	var _this = this;
+
+	return props.todos.map(function (todo) {
+		return diff.createElement("li", [diff.createAttribute("key", todo.key), diff.createAttribute("class", _this.getTodoClassNames(todo))], [diff.createElement('#text', null, "\n\t\t\t"), diff.createElement("div", [diff.createAttribute("class", 'view')], [diff.createElement('#text', null, "\n\t\t\t\t"), diff.createElement("input", [diff.createAttribute("class", 'toggle'), diff.createAttribute("type", 'checkbox'), diff.createAttribute(todo.completed ? 'checked' : '', todo.completed ? 'checked' : '')], []), diff.createElement('#text', null, "\n\t\t\t\t"), diff.createElement("label", [], [diff.createElement('', null, encode(todo.title))]), diff.createElement('#text', null, "\n\t\t\t\t"), diff.createElement("button", [diff.createAttribute("class", 'destroy')], []), diff.createElement('#text', null, "\n\t\t\t")]), diff.createElement('#text', null, "\n\n\t\t\t"), diff.createElement("form", [diff.createAttribute("class", 'edit-todo')], [diff.createElement('#text', null, "\n\t\t\t\t"), diff.createElement("input", [diff.createAttribute("onblur", props.stopEditing), diff.createAttribute("value", encode(todo.title)), diff.createAttribute("class", 'edit')], []), diff.createElement('#text', null, "\n\t\t\t")]), diff.createElement('#text', null, "\n\t\t")]);
+	});
+}
+
+},{"diffhtml":10}],3:[function(_dereq_,module,exports){
+'use strict';
+
+var _todoApp = _dereq_('./components/todo-app');
+
+var _todoApp2 = _interopRequireDefault(_todoApp);
+
+var _store = _dereq_('./redux/store');
+
+var _store2 = _interopRequireDefault(_store);
+
+var _url = _dereq_('./redux/actions/url');
+
+var urlActions = _interopRequireWildcard(_url);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var setHashState = function setHashState(hash) {
+  return _store2.default.dispatch(urlActions.setHashState(hash));
+};
+
+// Create the application and mount.
+_todoApp2.default.create(document.querySelector('todo-app'));
+
+// Set URL state.
+setHashState(location.hash);
+
+// Set URL state when hash changes.
+window.onhashchange = function (e) {
+  return setHashState(location.hash);
+};
+
+},{"./components/todo-app":1,"./redux/actions/url":5,"./redux/store":8}],4:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.addTodo = addTodo;
+exports.removeTodo = removeTodo;
+exports.toggleCompletion = toggleCompletion;
+exports.startEditing = startEditing;
+exports.stopEditing = stopEditing;
+exports.clearCompleted = clearCompleted;
+exports.toggleAll = toggleAll;
+var ADD_TODO = exports.ADD_TODO = 'ADD_TODO';
+var REMOVE_TODO = exports.REMOVE_TODO = 'REMOVE_TODO';
+var TOGGLE_COMPLETION = exports.TOGGLE_COMPLETION = 'TOGGLE_COMPLETION';
+var START_EDITING = exports.START_EDITING = 'START_EDITING';
+var STOP_EDITING = exports.STOP_EDITING = 'STOP_EDITING';
+var CLEAR_COMPLETED = exports.CLEAR_COMPLETED = 'CLEAR_COMPLETED';
+var TOGGLE_ALL = exports.TOGGLE_ALL = 'TOGGLE_ALL';
+
+function addTodo(title) {
+	return {
+		type: ADD_TODO,
+		title: title
+	};
+}
+
+function removeTodo(index) {
+	return {
+		type: REMOVE_TODO,
+		index: index
+	};
+}
+
+function toggleCompletion(index, completed) {
+	return {
+		type: TOGGLE_COMPLETION,
+		index: index,
+		completed: completed
+	};
+}
+
+function startEditing(index) {
+	return {
+		type: START_EDITING,
+		index: index
+	};
+}
+
+function stopEditing(index, title) {
+	return {
+		type: STOP_EDITING,
+		index: index,
+		title: title
+	};
+}
+
+function clearCompleted() {
+	return {
+		type: CLEAR_COMPLETED
+	};
+}
+
+function toggleAll(completed) {
+	return {
+		type: TOGGLE_ALL,
+		completed: completed
+	};
+}
+
+},{}],5:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.setHashState = setHashState;
+var SET_HASH_STATE = exports.SET_HASH_STATE = 'SET_HASH_STATE';
+
+function setHashState(hash) {
+	var path = hash.slice(1) || '/';
+
+	return {
+		type: SET_HASH_STATE,
+		path: path
+	};
+}
+
+},{}],6:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.default = todoApp;
+
+var _todoApp = _dereq_('../actions/todo-app');
+
+var todoAppActions = _interopRequireWildcard(_todoApp);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+var initialState = {
+	todos: JSON.parse(localStorage['diffhtml-todos'] || '[]'),
+
+	getByStatus: function getByStatus(type) {
+		return this.todos.filter(function (todo) {
+			switch (type) {
+				case 'active':
+					return !todo.completed;
+				case 'completed':
+					return todo.completed;
+			}
+
+			return true;
+		});
+	}
+};
+
+function todoApp() {
+	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
+	var action = arguments[1];
+
+	switch (action.type) {
+		case todoAppActions.ADD_TODO:
+			{
+				if (!action.title) {
+					return state;
+				}
+
+				return Object.assign({}, state, {
+					todos: state.todos.concat({
+						completed: false,
+						editing: false,
+
+						title: action.title.trim(),
+						key: Date.now() + state.todos.length
+					})
+				});
+			}
+
+		case todoAppActions.REMOVE_TODO:
+			{
+				state.todos.splice(action.index, 1);
+
+				return Object.assign({}, state, {
+					todos: [].concat(state.todos)
+				});
+			}
+
+		case todoAppActions.TOGGLE_COMPLETION:
+			{
+				var todo = state.todos[action.index];
+
+				state.todos[action.index] = Object.assign({}, todo, {
+					completed: action.completed
+				});
+
+				return Object.assign({}, state, {
+					todos: [].concat(state.todos)
+				});
+			}
+
+		case todoAppActions.START_EDITING:
+			{
+				var _todo = state.todos[action.index];
+
+				state.todos[action.index] = Object.assign({}, _todo, {
+					editing: true
+				});
+
+				return Object.assign({}, state, {
+					todos: [].concat(state.todos)
+				});
+			}
+
+		case todoAppActions.STOP_EDITING:
+			{
+				var _todo2 = state.todos[action.index];
+
+				state.todos[action.index] = Object.assign({}, _todo2, {
+					title: action.title,
+					editing: false
+				});
+
+				return Object.assign({}, state, {
+					todos: [].concat(state.todos)
+				});
+			}
+
+		case todoAppActions.CLEAR_COMPLETED:
+			{
+				return Object.assign({}, state, {
+					todos: state.todos.filter(function (todo) {
+						return todo.completed === false;
+					})
+				});
+			}
+
+		case todoAppActions.TOGGLE_ALL:
+			{
+				return Object.assign({}, state, {
+					todos: state.todos.map(function (todo) {
+						return Object.assign({}, todo, {
+							completed: action.completed
+						});
+					})
+				});
+			}
+
+		default:
+			{
+				return state;
+			}
+	}
+}
+
+},{"../actions/todo-app":4}],7:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+exports.default = url;
+
+var _url = _dereq_('../actions/url');
+
+var urlActions = _interopRequireWildcard(_url);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+var initialState = {
+	path: location.hash.slice(1) || '/'
+};
+
+function url() {
+	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
+	var action = arguments[1];
+
+	switch (action.type) {
+		case urlActions.SET_HASH_STATE:
+			{
+				return Object.assign({}, state, {
+					path: action.path
+				});
+			}
+
+		default:
+			{
+				return state;
+			}
+	}
+}
+
+},{"../actions/url":5}],8:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+	value: true
+});
+
+var _redux = _dereq_('redux');
+
+var _reduxLogger = _dereq_('redux-logger');
+
+var _reduxLogger2 = _interopRequireDefault(_reduxLogger);
+
+var _todoApp = _dereq_('./reducers/todo-app');
+
+var _todoApp2 = _interopRequireDefault(_todoApp);
+
+var _url = _dereq_('./reducers/url');
+
+var _url2 = _interopRequireDefault(_url);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+// Makes a reusable function to create a store. Currently not exported, but
+// could be in the future for testing purposes.
+var createStoreWithMiddleware = (0, _redux.compose)()(
+// Adds in store middleware, such as async thunk and logging.
+//applyMiddleware(createLogger()),
+
+// Hook devtools into our store.
+//window.devToolsExtension ? window.devToolsExtension() : f => f
+_redux.createStore);
+
+// Compose the root reducer from modular reducers.
+exports.default = createStoreWithMiddleware((0, _redux.combineReducers)({
+	// Encapsulates all TodoApp state.
+	todoApp: _todoApp2.default,
+
+	// Manage the URL state.
+	url: _url2.default,
+
+	// Store the last action taken.
+	lastAction: function lastAction(state, action) {
+		return action;
+	}
+}), {});
+
+},{"./reducers/todo-app":6,"./reducers/url":7,"redux":21,"redux-logger":15}],9:[function(_dereq_,module,exports){
 (function (global){
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.diff = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof _dereq_=="function"&&_dereq_;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof _dereq_=="function"&&_dereq_;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.inlineTransitions = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof _dereq_=="function"&&_dereq_;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof _dereq_=="function"&&_dereq_;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.default = get;
 
-var _make = _dereq_('../node/make');
+exports.default = function (_ref) {
+  var _this = this;
 
-var _make2 = _interopRequireDefault(_make);
+  var
 
-var _make3 = _dereq_('../element/make');
+  /**
+   * Binds inline transitions to the parent element and triggers for any matching
+   * nested children.
+   */
+  addTransitionState = _ref.addTransitionState;
+  var removeTransitionState = _ref.removeTransitionState;
 
-var _make4 = _interopRequireDefault(_make3);
+  addTransitionState('attached', function (element) {
+    if (element.attributes.attached) {
+      return element.attached.call(_this, element, element);
+    }
+  });
 
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+  // Set a "global" `attributeChanged` to monitor all elements for transition
+  // states being attached.
+  addTransitionState('attributeChanged', function (element, name, oldVal, newVal) {
+    var internalMap = transitionsMap.get(element) || {};
 
-/**
- * Takes in an element descriptor and resolve it to a uuid and DOM Node.
- *
- * @param descriptor - Element descriptor
- * @return {Object} containing the uuid and DOM node
- */
-function get(descriptor) {
-  var uuid = descriptor.uuid;
-  var element = (0, _make4.default)(descriptor);
+    if (states.indexOf(name) === -1) {
+      return;
+    }
 
-  return { uuid: uuid, element: element };
-}
+    if (newVal) {
+      transitionsMap.set(element, Object.assign(internalMap, _defineProperty({}, name, function () {
+        for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+          args[_key] = arguments[_key];
+        }
 
-},{"../element/make":2,"../node/make":6}],2:[function(_dereq_,module,exports){
+        if (element.contains(args[0])) {
+          return newVal.apply(_this, [element].concat(args));
+        }
+      })));
+
+      addTransitionState(name, internalMap[name]);
+    } else if (internalMap[name]) {
+      removeTransitionState(name, internalMap[name]);
+      delete internalMap[name];
+      transitionsMap.set(element, internalMap);
+    }
+  });
+};
+
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
+var states = ['attached', 'detached', 'replaced', 'attributeChanged', 'textChanged'];
+
+var transitionsMap = new WeakMap();module.exports = exports['default'];
+
+},{}]},{},[1])(1)
+});
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],10:[function(_dereq_,module,exports){
+(function (global){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.diff = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof _dereq_=="function"&&_dereq_;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof _dereq_=="function"&&_dereq_;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -66,8 +759,8 @@ function make(descriptor) {
   var isSvg = false;
 
   // If the element descriptor was already created, reuse the existing element.
-  if (_make2.default.nodes[descriptor.uuid]) {
-    return _make2.default.nodes[descriptor.uuid];
+  if (_make2.default.nodes.has(descriptor)) {
+    return _make2.default.nodes.get(descriptor);
   }
 
   if (descriptor.nodeName === '#text') {
@@ -90,9 +783,9 @@ function make(descriptor) {
 
         // If not a dynamic type, set as an attribute, since it's a valid
         // attribute value.
-        if (!isObject && !isFunction) {
+        if (attr.name && !isObject && !isFunction) {
           element.setAttribute(attr.name, attr.value);
-        } else if (typeof attr.value !== 'string') {
+        } else if (attr.name && typeof attr.value !== 'string') {
           // Necessary to track the attribute/prop existence.
           element.setAttribute(attr.name, '');
 
@@ -125,13 +818,13 @@ function make(descriptor) {
     }
   }
 
-  // Add to the nodes cache using the designated uuid as the lookup key.
-  _make2.default.nodes[descriptor.uuid] = element;
+  // Add to the nodes cache.
+  _make2.default.nodes.set(descriptor, element);
 
   return element;
 }
 
-},{"../node/make":6,"../svg":12}],3:[function(_dereq_,module,exports){
+},{"../node/make":5,"../svg":11}],2:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -191,7 +884,7 @@ var DOMException = exports.DOMException = function (_Error2) {
   return DOMException;
 }(Error);
 
-},{}],4:[function(_dereq_,module,exports){
+},{}],3:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -204,7 +897,6 @@ exports.html = html;
 
 var _parser = _dereq_('./util/parser');
 
-// Make a parser.
 var isPropEx = /(=|'|")/;
 
 /**
@@ -263,13 +955,13 @@ function html(strings) {
   return childNodes.length > 1 ? childNodes : childNodes[0];
 }
 
-},{"./util/parser":16}],5:[function(_dereq_,module,exports){
+},{"./util/parser":15}],4:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.html = exports.DOMException = exports.TransitionStateError = undefined;
+exports.createAttribute = exports.createElement = exports.html = exports.DOMException = exports.TransitionStateError = undefined;
 
 var _errors = _dereq_('./errors');
 
@@ -292,6 +984,21 @@ Object.defineProperty(exports, 'html', {
   enumerable: true,
   get: function get() {
     return _html.html;
+  }
+});
+
+var _transform = _dereq_('./util/transform');
+
+Object.defineProperty(exports, 'createElement', {
+  enumerable: true,
+  get: function get() {
+    return _transform.createElement;
+  }
+});
+Object.defineProperty(exports, 'createAttribute', {
+  enumerable: true,
+  get: function get() {
+    return _transform.createAttribute;
   }
 });
 exports.outerHTML = outerHTML;
@@ -529,7 +1236,7 @@ function enableProllyfill() {
   });
 }
 
-},{"./errors":3,"./html":4,"./node/make":6,"./node/patch":7,"./node/release":8,"./node/tree":10,"./transitions":13}],6:[function(_dereq_,module,exports){
+},{"./errors":2,"./html":3,"./node/make":5,"./node/patch":6,"./node/release":7,"./node/tree":9,"./transitions":12,"./util/transform":18}],5:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -542,7 +1249,7 @@ var _pools = _dereq_('../util/pools');
 var empty = {};
 
 // Cache created nodes inside this object.
-make.nodes = {};
+make.nodes = new Map();
 
 /**
  * Converts a live node into a virtual node.
@@ -562,21 +1269,17 @@ function make(node) {
   // diff and patch.
   var entry = _pools.pools.elementObject.get();
 
-  // Associate this newly allocated uuid with this Node.
-  make.nodes[entry.uuid] = node;
+  _pools.pools.elementObject.protect(entry);
+
+  // Associate this newly allocated descriptor with this Node.
+  make.nodes.set(entry, node);
 
   // Set a lowercased (normalized) version of the element's nodeName.
   entry.nodeName = node.nodeName.toLowerCase();
 
   // If the element is a text node set the nodeValue.
-  if (nodeType === 3) {
-    entry.nodeValue = node.textContent;
-    entry.nodeType = 3;
-  } else {
-    entry.nodeValue = '';
-    entry.nodeType = 1;
-  }
-
+  entry.nodeValue = nodeType === 3 ? node.textContent : '';
+  entry.nodeType = nodeType;
   entry.childNodes.length = 0;
   entry.attributes.length = 0;
 
@@ -584,22 +1287,18 @@ function make(node) {
   var attributes = node.attributes;
 
   // If the element has no attributes, skip over.
-  if (attributes) {
-    var attributesLength = attributes.length;
+  if (attributes && attributes.length) {
+    for (var i = 0; i < attributes.length; i++) {
+      var attr = _pools.pools.attributeObject.get();
 
-    if (attributesLength) {
-      for (var i = 0; i < attributesLength; i++) {
-        var attr = _pools.pools.attributeObject.get();
+      attr.name = attributes[i].name;
+      attr.value = attributes[i].value;
 
-        attr.name = attributes[i].name;
-        attr.value = attributes[i].value;
-
-        if (attr.name === 'key') {
-          entry.key = attr.value;
-        }
-
-        entry.attributes[entry.attributes.length] = attr;
+      if (attr.name === 'key') {
+        entry.key = attr.value;
       }
+
+      entry.attributes.push(attr);
     }
   }
 
@@ -608,12 +1307,12 @@ function make(node) {
   var childNodesLength = childNodes.length;
 
   // If the element has child nodes, convert them all to virtual nodes.
-  if (nodeType !== 3 && childNodesLength) {
+  if (childNodesLength) {
     for (var _i = 0; _i < childNodesLength; _i++) {
       var newNode = make(childNodes[_i]);
 
       if (newNode) {
-        entry.childNodes[entry.childNodes.length] = newNode;
+        entry.childNodes.push(newNode);
       }
     }
   }
@@ -628,7 +1327,7 @@ function make(node) {
   return entry;
 }
 
-},{"../util/pools":17}],7:[function(_dereq_,module,exports){
+},{"../util/pools":16}],6:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -717,7 +1416,7 @@ function patchNode(element, newHTML, options) {
     var oldTree = elementMeta.oldTree;
 
     if (oldTree) {
-      (0, _memory.unprotectElement)(oldTree, _make2.default);
+      (0, _memory.unprotectElement)(oldTree);
     }
 
     elementMeta.oldTree = (0, _memory.protectElement)((0, _make2.default)(element));
@@ -734,20 +1433,18 @@ function patchNode(element, newHTML, options) {
 
   if (typeof newHTML === 'string') {
     var childNodes = (0, _parser.parse)(newHTML).childNodes;
-    newTree = options.inner ? childNodes : childNodes[0];
+    newTree = isInner ? childNodes : childNodes[0];
   } else if (newHTML.ownerDocument) {
-    newTree = (0, _make2.default)(newHTML);
+    var vTree = (0, _make2.default)(newHTML);
+    newTree = vTree.nodeType === 11 ? vTree.childNodes : vTree;
   } else {
     newTree = newHTML;
   }
 
   if (options.inner) {
-    var _childNodes = Array.isArray(newTree) ? newTree : [newTree];
-
     newTree = {
-      childNodes: _childNodes,
+      childNodes: [].concat(newTree),
       attributes: elementMeta.oldTree.attributes,
-      uuid: elementMeta.oldTree.uuid,
       nodeName: elementMeta.oldTree.nodeName,
       nodeValue: elementMeta.oldTree.nodeValue
     };
@@ -771,7 +1468,7 @@ function patchNode(element, newHTML, options) {
   }
 }
 
-},{"../patches/process":11,"../util/memory":15,"../util/parser":16,"../util/pools":17,"../util/render":18,"./make":6,"./sync":9,"./tree":10}],8:[function(_dereq_,module,exports){
+},{"../patches/process":10,"../util/memory":14,"../util/parser":15,"../util/pools":16,"../util/render":17,"./make":5,"./sync":8,"./tree":9}],7:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -781,15 +1478,9 @@ exports.default = releaseNode;
 
 var _tree = _dereq_('./tree');
 
-var _make = _dereq_('./make');
-
-var _make2 = _interopRequireDefault(_make);
-
 var _memory = _dereq_('../util/memory');
 
 var _pools = _dereq_('../util/pools');
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 /**
  * Release's the allocated objects and recycles internal memory.
@@ -805,17 +1496,17 @@ function releaseNode(element) {
   if (elementMeta) {
     // If there was a tree set up, recycle the memory allocated for it.
     if (elementMeta.oldTree) {
-      (0, _memory.unprotectElement)(elementMeta.oldTree, _make2.default);
+      (0, _memory.unprotectElement)(elementMeta.oldTree);
     }
 
     // Remove this element's meta object from the cache.
     _tree.TreeCache.delete(element);
   }
 
-  (0, _memory.cleanMemory)(_make2.default);
+  (0, _memory.cleanMemory)();
 }
 
-},{"../util/memory":15,"../util/pools":17,"./make":6,"./tree":10}],9:[function(_dereq_,module,exports){
+},{"../util/memory":14,"../util/pools":16,"./tree":9}],8:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -857,10 +1548,32 @@ function sync(oldTree, newTree, patches) {
     throw new Error('Missing existing tree to sync');
   }
 
+  // Flatten out childNodes that are arrays.
+  if (newTree && newTree.childNodes) {
+    var hasArray = newTree.childNodes.some(function (node) {
+      return Array.isArray(node);
+    });
+
+    if (hasArray) {
+      (function () {
+        var newChildNodes = [];
+
+        newTree.childNodes.forEach(function (childNode) {
+          if (Array.isArray(childNode)) {
+            newChildNodes.push.apply(newChildNodes, childNode);
+          } else {
+            newChildNodes.push(childNode);
+          }
+        });
+
+        newTree.childNodes = newChildNodes;
+      })();
+    }
+  }
+
   var oldNodeValue = oldTree.nodeValue;
   var oldChildNodes = oldTree.childNodes;
   var oldChildNodesLength = oldChildNodes ? oldChildNodes.length : 0;
-  var oldElement = oldTree.uuid;
   var oldNodeName = oldTree.nodeName;
   var oldIsTextNode = oldNodeName === '#text';
 
@@ -879,7 +1592,6 @@ function sync(oldTree, newTree, patches) {
   var nodeValue = newTree.nodeValue;
   var childNodes = newTree.childNodes;
   var childNodesLength = childNodes ? childNodes.length : 0;
-  var newElement = newTree.uuid;
   var nodeName = newTree.nodeName;
   var newIsTextNode = nodeName === '#text';
   var oldIsFragment = oldTree.nodeName === '#document-fragment';
@@ -904,9 +1616,15 @@ function sync(oldTree, newTree, patches) {
 
       return patches;
     }
+    // This element never changes.
+    else if (oldTree === newTree) {
+        return patches;
+      }
+
+  var areTextNodes = oldIsTextNode && newIsTextNode;
 
   // If the top level nodeValue has changed we should reflect it.
-  if (oldIsTextNode && newIsTextNode && oldNodeValue !== nodeValue) {
+  if (areTextNodes && oldNodeValue !== nodeValue) {
     patches.push({
       __do__: CHANGE_TEXT,
       element: oldTree,
@@ -916,6 +1634,23 @@ function sync(oldTree, newTree, patches) {
     oldTree.nodeValue = newTree.nodeValue;
 
     return patches;
+  }
+
+  // Ensure keys exist for all the old & new elements.
+  var noOldKeys = !oldChildNodes.some(function (oldChildNode) {
+    return oldChildNode.key;
+  });
+  var newKeys = null;
+  var oldKeys = null;
+
+  if (!noOldKeys) {
+    newKeys = new Set(childNodes.map(function (childNode) {
+      return String(childNode.key);
+    }).filter(Boolean));
+
+    oldKeys = new Set(oldChildNodes.map(function (childNode) {
+      return String(childNode.key);
+    }).filter(Boolean));
   }
 
   // Most common additive elements.
@@ -942,11 +1677,6 @@ function sync(oldTree, newTree, patches) {
     });
   }
 
-  // Ensure keys exist for all the old & new elements.
-  var noOldKeys = !oldChildNodes.some(function (oldChildNode) {
-    return oldChildNode.key;
-  });
-
   // Remove these elements.
   if (oldChildNodesLength > childNodesLength) {
     (function () {
@@ -963,14 +1693,6 @@ function sync(oldTree, newTree, patches) {
       // key was specified.
       else {
           (function () {
-            var newKeys = new Set(childNodes.map(function (childNode) {
-              return String(childNode.key);
-            }).filter(Boolean));
-
-            var oldKeys = new Set(oldChildNodes.map(function (childNode) {
-              return String(childNode.key);
-            }).filter(Boolean));
-
             var keysToRemove = {};
             var truthy = 1;
 
@@ -1057,7 +1779,7 @@ function sync(oldTree, newTree, patches) {
   // Synchronize attributes
   var attributes = newTree.attributes;
 
-  if (attributes && !skipAttributeCompare) {
+  if (!skipAttributeCompare && attributes) {
     var oldLength = oldTree.attributes.length;
     var newLength = attributes.length;
 
@@ -1115,7 +1837,9 @@ function sync(oldTree, newTree, patches) {
     var toModify = attributes;
 
     for (var _i5 = 0; _i5 < toModify.length; _i5++) {
+      var oldAttrName = oldTree.attributes[_i5] && oldTree.attributes[_i5].name;
       var oldAttrValue = oldTree.attributes[_i5] && oldTree.attributes[_i5].value;
+      var newAttrName = attributes[_i5] && attributes[_i5].name;
       var newAttrValue = attributes[_i5] && attributes[_i5].value;
 
       // Only push in a change if the attribute or value changes.
@@ -1123,14 +1847,26 @@ function sync(oldTree, newTree, patches) {
         var _change2 = {
           __do__: MODIFY_ATTRIBUTE,
           element: oldTree,
-          name: toModify[_i5].name,
+          name: oldTree.attributes[_i5].name,
           value: toModify[_i5].value
         };
 
         // Replace the attribute in the virtual node.
         var _attr = oldTree.attributes[_i5];
-        _attr.name = toModify[_i5].name;
-        _attr.value = toModify[_i5].value;
+
+        // If the attribute names change, this is a removal.
+        if (oldAttrName === newAttrName) {
+          _attr.value = toModify[_i5].value;
+        } else {
+          _change2.name = newAttrName ? newAttrName : oldAttrName;
+          _change2.value = toModify[_i5].value ? toModify[_i5].value : undefined;
+          _attr.name = newAttrName;
+          _attr.value = _change2.value;
+
+          if (!newAttrName && !newAttrName) {
+            _pools.pools.attributeObject.unprotect(toModify[_i5]);
+          }
+        }
 
         // Add the change to the series of patches.
         patches.push(_change2);
@@ -1141,7 +1877,7 @@ function sync(oldTree, newTree, patches) {
   return patches;
 }
 
-},{"../util/pools":17}],10:[function(_dereq_,module,exports){
+},{"../util/pools":16}],9:[function(_dereq_,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -1150,7 +1886,7 @@ Object.defineProperty(exports, "__esModule", {
 // Cache prebuilt trees and lookup by element.
 var TreeCache = exports.TreeCache = new Map();
 
-},{}],11:[function(_dereq_,module,exports){
+},{}],10:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1167,11 +1903,7 @@ var transition = _interopRequireWildcard(_transitions);
 
 var _pools = _dereq_('../util/pools');
 
-var _get = _dereq_('../element/get');
-
-var _get2 = _interopRequireDefault(_get);
-
-var _make = _dereq_('../node/make');
+var _make = _dereq_('../element/make');
 
 var _make2 = _interopRequireDefault(_make);
 
@@ -1203,6 +1935,8 @@ var slice = Array.prototype.slice;
  * @param patches - Array that contains patch objects.
  */
 function process(element, patches) {
+  //console.log(JSON.parse(JSON.stringify(patches, null, 2)));
+
   var elementMeta = _tree.TreeCache.get(element);
   var promises = [];
   var triggerTransition = transition.buildTrigger(promises);
@@ -1211,7 +1945,7 @@ function process(element, patches) {
   var attached = function attached(descriptor, fragment, parentNode) {
     (0, _memory.protectElement)(descriptor);
 
-    var el = (0, _get2.default)(descriptor).element;
+    var el = (0, _make2.default)(descriptor);
 
     // If the element added was a DOM text node or SVG text element, trigger
     // the textChanged transition.
@@ -1258,9 +1992,9 @@ function process(element, patches) {
 
   var _loop = function _loop(i) {
     var patch = patches[i];
-    var el = patch.element ? (0, _get2.default)(patch.element).element : null;
-    var oldEl = patch.old ? (0, _get2.default)(patch.old).element : null;
-    var newEl = patch.new ? (0, _get2.default)(patch.new).element : null;
+    var el = patch.element ? (0, _make2.default)(patch.element) : null;
+    var oldEl = patch.old ? (0, _make2.default)(patch.old) : null;
+    var newEl = patch.new ? (0, _make2.default)(patch.new) : null;
 
     // Empty the Node's contents. This is an optimization, since `innerHTML`
     // will be faster than iterating over every element and manually removing.
@@ -1269,9 +2003,7 @@ function process(element, patches) {
       var detachPromises = transition.makePromises('detached', childNodes);
 
       triggerTransition('detached', detachPromises, function (promises) {
-        patch.toRemove.forEach(function (x) {
-          return (0, _memory.unprotectElement)(x, _make2.default);
-        });
+        (0, _memory.unprotectElement)(patch.toRemove);
         el.innerHTML = '';
       });
     }
@@ -1285,14 +2017,10 @@ function process(element, patches) {
         if (el.parentNode) {
           triggerTransition('detached', _detachPromises, function (promises) {
             el.parentNode.removeChild(el);
-            patch.toRemove.forEach(function (x) {
-              return (0, _memory.unprotectElement)(x, _make2.default);
-            });
+            (0, _memory.unprotectElement)(patch.toRemove);
           });
         } else {
-          patch.toRemove.forEach(function (x) {
-            return (0, _memory.unprotectElement)(x, _make2.default);
-          });
+          (0, _memory.unprotectElement)(patch.toRemove);
         }
       }
 
@@ -1322,7 +2050,7 @@ function process(element, patches) {
               allPromises.push.apply(allPromises, promises);
             });
 
-            (0, _memory.unprotectElement)(patch.old, _make2.default);
+            (0, _memory.unprotectElement)(patch.old);
 
             // Reset the tree cache.
             _tree.TreeCache.set(newEl, {
@@ -1335,7 +2063,7 @@ function process(element, patches) {
             if (allPromises.length) {
               Promise.all(allPromises).then(function replaceEntireElement() {
                 if (!oldEl.parentNode) {
-                  (0, _memory.unprotectElement)(patch.new, _make2.default);
+                  (0, _memory.unprotectElement)(patch.new);
 
                   throw new Error('Can\'t replace without parent, is this the ' + 'document root?');
                 }
@@ -1346,7 +2074,7 @@ function process(element, patches) {
               });
             } else {
               if (!oldEl.parentNode) {
-                (0, _memory.unprotectElement)(patch.new, _make2.default);
+                (0, _memory.unprotectElement)(patch.new);
 
                 throw new Error('Can\'t replace without parent, is this the ' + 'document root?');
               }
@@ -1382,7 +2110,7 @@ function process(element, patches) {
             // Remove.
             else if (oldEl && !newEl) {
                 if (!oldEl.parentNode) {
-                  (0, _memory.unprotectElement)(patch.old, _make2.default);
+                  (0, _memory.unprotectElement)(patch.old);
 
                   throw new Error('Can\'t remove without parent, is this the ' + 'document root?');
                 }
@@ -1397,7 +2125,7 @@ function process(element, patches) {
                   // And then empty out the entire contents.
                   oldEl.innerHTML = '';
 
-                  (0, _memory.unprotectElement)(patch.old, _make2.default);
+                  (0, _memory.unprotectElement)(patch.old);
                 });
               }
 
@@ -1405,8 +2133,8 @@ function process(element, patches) {
               else if (oldEl && newEl) {
                   (function () {
                     if (!oldEl.parentNode) {
-                      (0, _memory.unprotectElement)(patch.old, _make2.default);
-                      (0, _memory.unprotectElement)(patch.new, _make2.default);
+                      (0, _memory.unprotectElement)(patch.old);
+                      (0, _memory.unprotectElement)(patch.new);
 
                       throw new Error('Can\'t replace without parent, is this the ' + 'document root?');
                     }
@@ -1448,7 +2176,7 @@ function process(element, patches) {
                           oldEl.parentNode.replaceChild(newEl, oldEl);
                         }
 
-                        (0, _memory.unprotectElement)(patch.old, _make2.default);
+                        (0, _memory.unprotectElement)(patch.old);
 
                         (0, _memory.protectElement)(patch.new);
                       }, function (ex) {
@@ -1456,14 +2184,14 @@ function process(element, patches) {
                       });
                     } else {
                       if (!oldEl.parentNode) {
-                        (0, _memory.unprotectElement)(patch.old, _make2.default);
-                        (0, _memory.unprotectElement)(patch.new, _make2.default);
+                        (0, _memory.unprotectElement)(patch.old);
+                        (0, _memory.unprotectElement)(patch.new);
 
                         throw new Error('Can\'t replace without parent, is this the ' + 'document root?');
                       }
 
                       oldEl.parentNode.replaceChild(newEl, oldEl);
-                      (0, _memory.unprotectElement)(patch.old, _make2.default);
+                      (0, _memory.unprotectElement)(patch.old);
                       (0, _memory.protectElement)(patch.new);
                     }
                   })();
@@ -1491,7 +2219,9 @@ function process(element, patches) {
                     // If not a dynamic type, set as an attribute, since it's a valid
                     // attribute value.
                     if (!isObject && !isFunction) {
-                      el.setAttribute(patch.name, patch.value);
+                      if (patch.name) {
+                        el.setAttribute(patch.name, patch.value);
+                      }
                     } else if (typeof patch.value !== 'string') {
                       // Necessary to track the attribute/prop existence.
                       el.setAttribute(patch.name, '');
@@ -1500,7 +2230,6 @@ function process(element, patches) {
                       el[patch.name] = patch.value;
                     }
 
-                    // Support live updating of the value attribute.
                     // Support live updating of the value attribute.
                     if (patch.name === 'value' || patch.name === 'checked') {
                       el[patch.name] = patch.value;
@@ -1539,7 +2268,7 @@ function process(element, patches) {
   return promises.filter(Boolean);
 }
 
-},{"../element/get":1,"../node/make":6,"../node/sync":9,"../node/tree":10,"../transitions":13,"../util/entities":14,"../util/memory":15,"../util/pools":17}],12:[function(_dereq_,module,exports){
+},{"../element/make":1,"../node/sync":8,"../node/tree":9,"../transitions":12,"../util/entities":13,"../util/memory":14,"../util/pools":16}],11:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1551,7 +2280,7 @@ var elements = exports.elements = ['altGlyph', 'altGlyphDef', 'altGlyphItem', 'a
 // Namespace.
 var namespace = exports.namespace = 'http://www.w3.org/2000/svg';
 
-},{}],13:[function(_dereq_,module,exports){
+},{}],12:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1754,7 +2483,7 @@ function makePromises(stateName) {
   };
 }
 
-},{"./node/make":6}],14:[function(_dereq_,module,exports){
+},{"./node/make":5}],13:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1767,16 +2496,20 @@ var element = document.createElement('div');
  * Decodes HTML strings.
  *
  * @see http://stackoverflow.com/a/5796718
- * @param stringing
+ * @param string
  * @return unescaped HTML
  */
 function decodeEntities(string) {
-  element.innerHTML = string;
+  // If there are no HTML entities, we can safely pass the string through.
+  if (!string || !string.indexOf || string.indexOf('&') === -1) {
+    return string;
+  }
 
+  element.innerHTML = string;
   return element.textContent;
 }
 
-},{}],15:[function(_dereq_,module,exports){
+},{}],14:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1801,6 +2534,10 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
  * @return element
  */
 function protectElement(element) {
+  if (Array.isArray(element)) {
+    return element.forEach(protectElement);
+  }
+
   var elementObject = _pools.pools.elementObject;
   var attributeObject = _pools.pools.attributeObject;
 
@@ -1818,21 +2555,20 @@ function protectElement(element) {
  * @param element
  * @return
  */
-function unprotectElement(element, makeNode) {
+function unprotectElement(element) {
+  if (Array.isArray(element)) {
+    return element.forEach(unprotectElement);
+  }
+
   var elementObject = _pools.pools.elementObject;
   var attributeObject = _pools.pools.attributeObject;
 
   elementObject.unprotect(element);
-  elementObject.cache.uuid.delete(element.uuid);
 
   element.attributes.forEach(attributeObject.unprotect, attributeObject);
-  element.childNodes.forEach(function (node) {
-    return unprotectElement(node, makeNode);
-  });
+  element.childNodes.forEach(unprotectElement);
 
-  if (makeNode && makeNode.nodes) {
-    delete makeNode.nodes[element.uuid];
-  }
+  _make2.default.nodes.delete(element);
 
   return element;
 }
@@ -1840,35 +2576,37 @@ function unprotectElement(element, makeNode) {
 /**
  * Recycles all unprotected allocations.
  */
-function cleanMemory(makeNode) {
-  var elementObject = _pools.pools.elementObject;
-  var attributeObject = _pools.pools.attributeObject;
-
-  // Clean out unused elements.
-  if (makeNode && makeNode.nodes) {
-    for (var uuid in makeNode.nodes) {
-      if (!elementObject.cache.uuid.has(uuid)) {
-        delete makeNode.nodes[uuid];
-      }
-    }
-  }
+function cleanMemory() {
+  var elementCache = _pools.pools.elementObject.cache;
+  var attributeCache = _pools.pools.attributeObject.cache;
 
   // Empty all element allocations.
-  elementObject.cache.allocated.forEach(function (v) {
-    elementObject.cache.free.push(v);
+  elementCache.allocated.forEach(function (v) {
+    if (elementCache.free.length < _pools.count) {
+      elementCache.free.push(v);
+    }
   });
 
-  elementObject.cache.allocated.clear();
+  elementCache.allocated.clear();
+
+  // Clean out unused elements.
+  _make2.default.nodes.forEach(function (node, descriptor) {
+    if (!elementCache.protected.has(descriptor)) {
+      _make2.default.nodes.delete(descriptor);
+    }
+  });
 
   // Empty all attribute allocations.
-  attributeObject.cache.allocated.forEach(function (v) {
-    attributeObject.cache.free.push(v);
+  attributeCache.allocated.forEach(function (v) {
+    if (attributeCache.free.length < _pools.count) {
+      attributeCache.free.push(v);
+    }
   });
 
-  attributeObject.cache.allocated.clear();
+  attributeCache.allocated.clear();
 }
 
-},{"../node/make":6,"../util/pools":17}],16:[function(_dereq_,module,exports){
+},{"../node/make":5,"../util/pools":16}],15:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -1885,7 +2623,7 @@ var kMarkupPattern = /<!--[^]*?(?=-->)-->|<(\/?)([a-z\-][a-z0-9\-]*)\s*([^>]*?)(
 
 var kAttributePattern = /\b(id|class)\s*(=\s*("([^"]+)"|'([^']+)'|(\S+)))?/ig;
 
-var reAttrPattern = /\b([a-z][a-z0-9\-]*)\s*(=\s*("([^"]+)"|'([^']+)'|(\S+)))?/ig;
+var reAttrPattern = /\b([_a-z][_a-z0-9\-]*)\s*(=\s*("([^"]+)"|'([^']+)'|(\S+)))?/ig;
 
 var kSelfClosingElements = {
   meta: true,
@@ -2144,6 +2882,14 @@ function parse(data, supplemental) {
     }
   }
 
+  // Find any last remaining text after the parsing completes over tags.
+  var remainingText = data.slice(lastTextPos).trim();
+
+  // If the text exists and isn't just whitespace, push into a new TextNode.
+  if (remainingText) {
+    currentParent.childNodes.push(TextNode(remainingText));
+  }
+
   // This is an entire document, so only allow the HTML children to be
   // body or head.
   if (root.childNodes.length && root.childNodes[0].nodeName === 'html') {
@@ -2221,24 +2967,14 @@ function parse(data, supplemental) {
   return root;
 }
 
-},{"./pools":17}],17:[function(_dereq_,module,exports){
+},{"./pools":16}],16:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.count = exports.pools = undefined;
 exports.createPool = createPool;
 exports.initializePools = initializePools;
-
-var _uuid2 = _dereq_('./uuid');
-
-var _uuid3 = _interopRequireDefault(_uuid2);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-var uuid = _uuid3.default;
-
 var pools = exports.pools = {};
 var count = exports.count = 10000;
 
@@ -2256,8 +2992,7 @@ function createPool(name, opts) {
   var cache = {
     free: [],
     allocated: new Set(),
-    protected: new Set(),
-    uuid: new Set()
+    protected: new Set()
   };
 
   // Prime the cache with n objects.
@@ -2276,10 +3011,6 @@ function createPool(name, opts) {
     protect: function protect(value) {
       cache.allocated.delete(value);
       cache.protected.add(value);
-
-      if (name === 'elementObject') {
-        cache.uuid.add(value.uuid);
-      }
     },
     unprotect: function unprotect(value) {
       if (cache.protected.has(value)) {
@@ -2308,7 +3039,6 @@ function initializePools(COUNT) {
         nodeValue: '',
         nodeType: 1,
         key: '',
-        uuid: uuid(),
         childNodes: [],
         attributes: []
       };
@@ -2319,7 +3049,7 @@ function initializePools(COUNT) {
 // Create ${COUNT} items of each type.
 initializePools(count);
 
-},{"./uuid":19}],18:[function(_dereq_,module,exports){
+},{}],17:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2388,638 +3118,274 @@ function completeRender(element, elementMeta) {
     }
 
     // Clean out all the existing allocations.
-    (0, _memory.cleanMemory)(_make2.default);
+    (0, _memory.cleanMemory)();
 
     // Dispatch an event on the element once rendering has completed.
     element.dispatchEvent(new CustomEvent('renderComplete'));
   };
 }
 
-},{"../node/make":6,"../node/patch":7,"../node/tree":10,"../util/memory":15,"../util/pools":17}],19:[function(_dereq_,module,exports){
+},{"../node/make":5,"../node/patch":6,"../node/tree":9,"../util/memory":14,"../util/pools":16}],18:[function(_dereq_,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.default = uuid;
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+exports.createElement = createElement;
+exports.createAttribute = createAttribute;
+
+var _pools = _dereq_('./pools');
+
+var _parser = _dereq_('./parser');
+
+var _make = _dereq_('../node/make');
+
+var _make2 = _interopRequireDefault(_make);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
 /**
- * Generates a uuid.
+ * TODO Phase this out if possible, super slow iterations...
  *
- * @see http://stackoverflow.com/a/2117523/282175
- * @return {string} uuid
+ * @param childNodes
+ * @return
  */
-function uuid() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    var r = Math.random() * 16 | 0;
-    var v = c == 'x' ? r : r & 0x3 | 0x8;
-    return v.toString(16);
+function normalizeChildNodes(childNodes) {
+  var newChildNodes = [];
+
+  [].concat(childNodes).forEach(function (childNode) {
+    if ((typeof childNode === 'undefined' ? 'undefined' : _typeof(childNode)) !== 'object') {
+      if (childNode.indexOf && childNode.indexOf('<') > -1) {
+        var nodes = (0, _parser.parse)(childNode).childNodes;
+        newChildNodes.push(nodes.length === 1 ? nodes[0] : nodes);
+      } else {
+        newChildNodes.push(createElement('#text', null, childNode));
+      }
+    } else if ('length' in childNode) {
+      for (var i = 0; i < childNode.length; i++) {
+        var newChild = childNode[i];
+        var newNode = newChild.ownerDocument ? (0, _make2.default)(newChild) : newChild;
+
+        newChildNodes.push(newNode);
+      }
+    } else {
+      var node = childNode.ownerDocument ? (0, _make2.default)(childNode) : childNode;
+      newChildNodes.push(node);
+    }
   });
+
+  return newChildNodes;
 }
 
-},{}]},{},[5])(5)
+/**
+ * Creates a virtual element used in or as a virtual tree.
+ *
+ * @param nodeName
+ * @param attributes
+ * @param childNodes
+ * @return {Object} element
+ */
+function createElement(nodeName, attributes, childNodes) {
+  if (nodeName === '') {
+    return normalizeChildNodes(childNodes);
+  }
+
+  var entry = _pools.pools.elementObject.get();
+  var isTextNode = nodeName === 'text' || nodeName === '#text';
+
+  entry.key = '';
+  entry.nodeName = nodeName;
+
+  if (!isTextNode) {
+    entry.nodeType = 1;
+    entry.nodeValue = '';
+    entry.attributes = attributes || [];
+    entry.childNodes = normalizeChildNodes(childNodes);
+
+    // Set the key prop if passed as an attr.
+    entry.attributes.some(function (attr) {
+      if (attr.name === 'key') {
+        entry.key = attr.value;
+        return true;
+      }
+    });
+  } else {
+    var value = Array.isArray(childNodes) ? childNodes.join('') : childNodes;
+
+    entry.nodeType = 3;
+    entry.nodeValue = value;
+    entry.attributes.length = 0;
+    entry.childNodes.length = 0;
+  }
+
+  return entry;
+}
+
+/**
+ * Creates a virtual attribute used in a virtual element.
+ *
+ * @param name
+ * @param value
+ * @return {Object} attribute
+ */
+function createAttribute(name, value) {
+  var entry = _pools.pools.attributeObject.get();
+
+  entry.name = name;
+  entry.value = value;
+
+  return entry;
+}
+
+},{"../node/make":5,"./parser":15,"./pools":16}]},{},[4])(4)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],2:[function(_dereq_,module,exports){
-'use strict';
+},{}],11:[function(_dereq_,module,exports){
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeGetPrototype = Object.getPrototypeOf;
 
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-var _templateObject = _taggedTemplateLiteral(['\n\t\t\t<section class="todoapp"\n\t\t\t\tonsubmit=', '\n\t\t\t\tonclick=', '\n\t\t\t\tonkeydown=', '\n\t\t\t\tondblclick=', '\n\t\t\t\tonchange=', '>\n\n\t\t\t\t<header class="header">\n\t\t\t\t\t<h1>todos</h1>\n\n\t\t\t\t\t<form class="add-todo">\n\t\t\t\t\t\t<input\n\t\t\t\t\t\t\tclass="new-todo"\n\t\t\t\t\t\t\tplaceholder="What needs to be done?"\n\t\t\t\t\t\t\tautofocus="">\n\t\t\t\t\t</form>\n\t\t\t\t</header>\n\n\t\t\t\t', '\n\t\t\t</section>\n\n\t\t\t', '\n\t\t'], ['\n\t\t\t<section class="todoapp"\n\t\t\t\tonsubmit=', '\n\t\t\t\tonclick=', '\n\t\t\t\tonkeydown=', '\n\t\t\t\tondblclick=', '\n\t\t\t\tonchange=', '>\n\n\t\t\t\t<header class="header">\n\t\t\t\t\t<h1>todos</h1>\n\n\t\t\t\t\t<form class="add-todo">\n\t\t\t\t\t\t<input\n\t\t\t\t\t\t\tclass="new-todo"\n\t\t\t\t\t\t\tplaceholder="What needs to be done?"\n\t\t\t\t\t\t\tautofocus="">\n\t\t\t\t\t</form>\n\t\t\t\t</header>\n\n\t\t\t\t', '\n\t\t\t</section>\n\n\t\t\t', '\n\t\t']),
-    _templateObject2 = _taggedTemplateLiteral(['\n\t\t\t\t\t<section class="main">\n\t\t\t\t\t\t<input class="toggle-all" type="checkbox" ', '>\n\t\t\t\t\t\t<ul class="todo-list">', '</ul>\n\t\t\t\t\t</section>\n\n\t\t\t\t\t<footer class="footer">\n\t\t\t\t\t\t<span class="todo-count">\n\t\t\t\t\t\t\t<strong>', '</strong>\n\t\t\t\t\t\t\t', ' left\n\t\t\t\t\t\t</span>\n\n\n\t\t\t\t\t\t<ul class="filters">\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/" class=', '>\n\t\t\t\t\t\t\t\t\tAll\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/active" class=', '>\n\t\t\t\t\t\t\t\t\tActive\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/completed" class=', '>\n\t\t\t\t\t\t\t\t\tCompleted\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t</ul>\n\n\t\t\t\t\t\t', '\n\t\t\t\t\t</footer>\n\t\t\t\t'], ['\n\t\t\t\t\t<section class="main">\n\t\t\t\t\t\t<input class="toggle-all" type="checkbox" ', '>\n\t\t\t\t\t\t<ul class="todo-list">', '</ul>\n\t\t\t\t\t</section>\n\n\t\t\t\t\t<footer class="footer">\n\t\t\t\t\t\t<span class="todo-count">\n\t\t\t\t\t\t\t<strong>', '</strong>\n\t\t\t\t\t\t\t', ' left\n\t\t\t\t\t\t</span>\n\n\n\t\t\t\t\t\t<ul class="filters">\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/" class=', '>\n\t\t\t\t\t\t\t\t\tAll\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/active" class=', '>\n\t\t\t\t\t\t\t\t\tActive\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t\t<li>\n\t\t\t\t\t\t\t\t<a href="#/completed" class=', '>\n\t\t\t\t\t\t\t\t\tCompleted\n\t\t\t\t\t\t\t\t</a>\n\t\t\t\t\t\t\t</li>\n\t\t\t\t\t\t</ul>\n\n\t\t\t\t\t\t', '\n\t\t\t\t\t</footer>\n\t\t\t\t']),
-    _templateObject3 = _taggedTemplateLiteral(['\n\t\t\t\t\t\t\t<button class="clear-completed" onclick=', '>\n\t\t\t\t\t\t\t\tClear completed\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t'], ['\n\t\t\t\t\t\t\t<button class="clear-completed" onclick=', '>\n\t\t\t\t\t\t\t\tClear completed\n\t\t\t\t\t\t\t</button>\n\t\t\t\t\t\t']);
-
-var _diffhtml = _dereq_('diffhtml');
-
-var _store = _dereq_('../redux/store');
-
-var _store2 = _interopRequireDefault(_store);
-
-var _todoApp = _dereq_('../redux/actions/todo-app');
-
-var todoAppActions = _interopRequireWildcard(_todoApp);
-
-var _todoList = _dereq_('./todo-list');
-
-var _todoList2 = _interopRequireDefault(_todoList);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function _taggedTemplateLiteral(strings, raw) { return Object.freeze(Object.defineProperties(strings, { raw: { value: Object.freeze(raw) } })); }
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var TodoApp = function () {
-	_createClass(TodoApp, null, [{
-		key: 'create',
-		value: function create(mount) {
-			return new TodoApp(mount);
-		}
-	}]);
-
-	function TodoApp(mount) {
-		var _this = this;
-
-		_classCallCheck(this, TodoApp);
-
-		this.mount = mount;
-		this.existingMarkup = this.mount.innerHTML;
-		this.unsubscribeStore = _store2.default.subscribe(function () {
-			return _this.render();
-		});
-
-		this.render();
-	}
-
-	_createClass(TodoApp, [{
-		key: 'addTodo',
-		value: function addTodo(ev) {
-			if (!ev.target.matches('.add-todo')) {
-				return;
-			}
-
-			ev.preventDefault();
-
-			var newTodo = ev.target.querySelector('.new-todo');
-			_store2.default.dispatch(todoAppActions.addTodo(newTodo.value));
-			newTodo.value = '';
-		}
-	}, {
-		key: 'removeTodo',
-		value: function removeTodo(ev) {
-			if (!ev.target.matches('.destroy')) {
-				return;
-			}
-
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-
-			_store2.default.dispatch(todoAppActions.removeTodo(index));
-		}
-	}, {
-		key: 'toggleCompletion',
-		value: function toggleCompletion(ev) {
-			if (!ev.target.matches('.toggle')) {
-				return;
-			}
-
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-
-			_store2.default.dispatch(todoAppActions.toggleCompletion(index, ev.target.checked));
-		}
-	}, {
-		key: 'startEditing',
-		value: function startEditing(ev) {
-			if (!ev.target.matches('label')) {
-				return;
-			}
-
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-
-			_store2.default.dispatch(todoAppActions.startEditing(index));
-
-			li.querySelector('form input').focus();
-		}
-	}, {
-		key: 'stopEditing',
-		value: function stopEditing(ev) {
-			ev.preventDefault();
-
-			var parentNode = ev.target.parentNode;
-			var nodeName = parentNode.nodeName.toLowerCase();
-			var li = nodeName === 'li' ? parentNode : parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-			var editTodo = li.querySelector('.edit');
-			var text = editTodo.value.trim();
-
-			if (text) {
-				_store2.default.dispatch(todoAppActions.stopEditing(index, text));
-			} else {
-				_store2.default.dispatch(todoAppActions.removeTodo(index));
-			}
-		}
-	}, {
-		key: 'clearCompleted',
-		value: function clearCompleted(ev) {
-			if (!ev.target.matches('.clear-completed')) {
-				return;
-			}
-
-			_store2.default.dispatch(todoAppActions.clearCompleted());
-		}
-	}, {
-		key: 'toggleAll',
-		value: function toggleAll(ev) {
-			if (!ev.target.matches('.toggle-all')) {
-				return;
-			}
-
-			_store2.default.dispatch(todoAppActions.toggleAll(ev.target.checked));
-		}
-	}, {
-		key: 'handleKeyDown',
-		value: function handleKeyDown(ev) {
-			if (!ev.target.matches('.edit')) {
-				return;
-			}
-
-			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
-
-			var li = ev.target.parentNode.parentNode;
-			var index = Array.from(li.parentNode.children).indexOf(li);
-
-			switch (ev.keyCode) {
-				case 27:
-					{
-						ev.target.value = todoApp.todos[index].title;
-						this.stopEditing(ev);
-					}
-			}
-		}
-	}, {
-		key: 'getTodoClassNames',
-		value: function getTodoClassNames(todo) {
-			return [todo.completed ? 'completed' : '', todo.editing ? 'editing' : ''].filter(Boolean).join(' ');
-		}
-	}, {
-		key: 'setCheckedState',
-		value: function setCheckedState() {
-			var todoApp = _store2.default.getState()[this.mount.dataset.reducer];
-			var notChecked = todoApp.todos.filter(function (todo) {
-				return !todo.completed;
-			}).length;
-
-			return notChecked ? '' : 'checked';
-		}
-	}, {
-		key: 'onSubmitHandler',
-		value: function onSubmitHandler(ev) {
-			ev.preventDefault();
-
-			if (ev.target.matches('.add-todo')) {
-				this.addTodo(ev);
-			} else if (ev.target.matches('.edit-todo')) {
-				this.stopEditing(ev);
-			}
-		}
-	}, {
-		key: 'onClickHandler',
-		value: function onClickHandler(ev) {
-			if (ev.target.matches('.destroy')) {
-				this.removeTodo(ev);
-			} else if (ev.target.matches('.toggle-all')) {
-				this.toggleAll(ev);
-			} else if (ev.target.matches('.clear-completed')) {
-				this.clearCompleted(ev);
-			}
-		}
-	}, {
-		key: 'getNavClass',
-		value: function getNavClass(name) {
-			var state = _store2.default.getState();
-			var path = state.url.path;
-
-			return path === name ? 'selected' : undefined;
-		}
-	}, {
-		key: 'render',
-		value: function render() {
-			var state = _store2.default.getState();
-			var todoApp = state[this.mount.dataset.reducer];
-			var status = state.url.path.slice(1);
-			var allTodos = todoApp.todos;
-			var todos = todoApp.getByStatus(status);
-			var activeTodos = todoApp.getByStatus('active');
-			var completedTodos = todoApp.getByStatus('completed');
-
-			localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
-
-			(0, _diffhtml.innerHTML)(this.mount, (0, _diffhtml.html)(_templateObject, this.onSubmitHandler.bind(this), this.onClickHandler.bind(this), this.handleKeyDown.bind(this), this.startEditing.bind(this), this.toggleCompletion.bind(this), allTodos.length ? (0, _diffhtml.html)(_templateObject2, this.setCheckedState(), _todoList2.default.call(this, {
-				stopEditing: this.stopEditing.bind(this),
-				todos: todos
-			}), activeTodos.length, activeTodos.length == 1 ? 'item' : 'items', this.getNavClass('/'), this.getNavClass('/active'), this.getNavClass('/completed'), completedTodos.length ? (0, _diffhtml.html)(_templateObject3, this.clearCompleted.bind(this)) : '') : '', this.existingMarkup));
-		}
-	}]);
-
-	return TodoApp;
-}();
-
-exports.default = TodoApp;
-
-},{"../redux/actions/todo-app":5,"../redux/store":9,"./todo-list":3,"diffhtml":1}],3:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-
-var _templateObject = _taggedTemplateLiteral(['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input\n\t\t\t\t\tonblur=', '\n\t\t\t\t\tvalue="', '"\n\t\t\t\t\tclass="edit">\n\t\t\t</form>\n\t\t</li>\n\t'], ['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input\n\t\t\t\t\tonblur=', '\n\t\t\t\t\tvalue="', '"\n\t\t\t\t\tclass="edit">\n\t\t\t</form>\n\t\t</li>\n\t']);
-
-exports.default = renderTodoList;
-
-var _diffhtml = _dereq_('diffhtml');
-
-function _taggedTemplateLiteral(strings, raw) { return Object.freeze(Object.defineProperties(strings, { raw: { value: Object.freeze(raw) } })); }
-
-function encode(str) {
-	return str.replace(/["&'<>`]/g, function (match) {
-		return '&#' + match.charCodeAt(0) + ';';
-	});
+/**
+ * Gets the `[[Prototype]]` of `value`.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {null|Object} Returns the `[[Prototype]]`.
+ */
+function getPrototype(value) {
+  return nativeGetPrototype(Object(value));
 }
 
-function renderTodoList(props) {
-	var _this = this;
+module.exports = getPrototype;
 
-	return props.todos.map(function (todo) {
-		return (0, _diffhtml.html)(_templateObject, todo.key, _this.getTodoClassNames(todo), todo.completed ? 'checked' : '', encode(todo.title), props.stopEditing, encode(todo.title));
-	});
+},{}],12:[function(_dereq_,module,exports){
+/**
+ * Checks if `value` is a host object in IE < 9.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
+ */
+function isHostObject(value) {
+  // Many host objects are `Object` objects that can coerce to strings
+  // despite having improperly defined `toString` methods.
+  var result = false;
+  if (value != null && typeof value.toString != 'function') {
+    try {
+      result = !!(value + '');
+    } catch (e) {}
+  }
+  return result;
 }
 
-},{"diffhtml":1}],4:[function(_dereq_,module,exports){
-'use strict';
+module.exports = isHostObject;
 
-var _todoApp = _dereq_('./components/todo-app');
-
-var _todoApp2 = _interopRequireDefault(_todoApp);
-
-var _store = _dereq_('./redux/store');
-
-var _store2 = _interopRequireDefault(_store);
-
-var _url = _dereq_('./redux/actions/url');
-
-var urlActions = _interopRequireWildcard(_url);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-var setHashState = function setHashState(hash) {
-  return _store2.default.dispatch(urlActions.setHashState(hash));
-};
-
-// Create the application and mount.
-_todoApp2.default.create(document.querySelector('todo-app'));
-
-// Set URL state.
-setHashState(location.hash);
-
-// Set URL state when hash changes.
-window.onhashchange = function (e) {
-  return setHashState(location.hash);
-};
-
-},{"./components/todo-app":2,"./redux/actions/url":6,"./redux/store":9}],5:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.addTodo = addTodo;
-exports.removeTodo = removeTodo;
-exports.toggleCompletion = toggleCompletion;
-exports.startEditing = startEditing;
-exports.stopEditing = stopEditing;
-exports.clearCompleted = clearCompleted;
-exports.toggleAll = toggleAll;
-var ADD_TODO = exports.ADD_TODO = 'ADD_TODO';
-var REMOVE_TODO = exports.REMOVE_TODO = 'REMOVE_TODO';
-var TOGGLE_COMPLETION = exports.TOGGLE_COMPLETION = 'TOGGLE_COMPLETION';
-var START_EDITING = exports.START_EDITING = 'START_EDITING';
-var STOP_EDITING = exports.STOP_EDITING = 'STOP_EDITING';
-var CLEAR_COMPLETED = exports.CLEAR_COMPLETED = 'CLEAR_COMPLETED';
-var TOGGLE_ALL = exports.TOGGLE_ALL = 'TOGGLE_ALL';
-
-function addTodo(title) {
-	return {
-		type: ADD_TODO,
-		title: title
-	};
+},{}],13:[function(_dereq_,module,exports){
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return !!value && typeof value == 'object';
 }
 
-function removeTodo(index) {
-	return {
-		type: REMOVE_TODO,
-		index: index
-	};
+module.exports = isObjectLike;
+
+},{}],14:[function(_dereq_,module,exports){
+var getPrototype = _dereq_('./_getPrototype'),
+    isHostObject = _dereq_('./_isHostObject'),
+    isObjectLike = _dereq_('./isObjectLike');
+
+/** `Object#toString` result references. */
+var objectTag = '[object Object]';
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = Function.prototype.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/** Used to infer the `Object` constructor. */
+var objectCtorString = funcToString.call(Object);
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/**
+ * Checks if `value` is a plain object, that is, an object created by the
+ * `Object` constructor or one with a `[[Prototype]]` of `null`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.8.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a plain object,
+ *  else `false`.
+ * @example
+ *
+ * function Foo() {
+ *   this.a = 1;
+ * }
+ *
+ * _.isPlainObject(new Foo);
+ * // => false
+ *
+ * _.isPlainObject([1, 2, 3]);
+ * // => false
+ *
+ * _.isPlainObject({ 'x': 0, 'y': 0 });
+ * // => true
+ *
+ * _.isPlainObject(Object.create(null));
+ * // => true
+ */
+function isPlainObject(value) {
+  if (!isObjectLike(value) ||
+      objectToString.call(value) != objectTag || isHostObject(value)) {
+    return false;
+  }
+  var proto = getPrototype(value);
+  if (proto === null) {
+    return true;
+  }
+  var Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor;
+  return (typeof Ctor == 'function' &&
+    Ctor instanceof Ctor && funcToString.call(Ctor) == objectCtorString);
 }
 
-function toggleCompletion(index, completed) {
-	return {
-		type: TOGGLE_COMPLETION,
-		index: index,
-		completed: completed
-	};
-}
+module.exports = isPlainObject;
 
-function startEditing(index) {
-	return {
-		type: START_EDITING,
-		index: index
-	};
-}
-
-function stopEditing(index, title) {
-	return {
-		type: STOP_EDITING,
-		index: index,
-		title: title
-	};
-}
-
-function clearCompleted() {
-	return {
-		type: CLEAR_COMPLETED
-	};
-}
-
-function toggleAll(completed) {
-	return {
-		type: TOGGLE_ALL,
-		completed: completed
-	};
-}
-
-},{}],6:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.setHashState = setHashState;
-var SET_HASH_STATE = exports.SET_HASH_STATE = 'SET_HASH_STATE';
-
-function setHashState(hash) {
-	var path = hash.slice(1) || '/';
-
-	return {
-		type: SET_HASH_STATE,
-		path: path
-	};
-}
-
-},{}],7:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.default = todoApp;
-
-var _todoApp = _dereq_('../actions/todo-app');
-
-var todoAppActions = _interopRequireWildcard(_todoApp);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-var initialState = {
-	todos: JSON.parse(localStorage['diffhtml-todos'] || '[]'),
-
-	getByStatus: function getByStatus(type) {
-		return this.todos.filter(function (todo) {
-			switch (type) {
-				case 'active':
-					return !todo.completed;
-				case 'completed':
-					return todo.completed;
-			}
-
-			return true;
-		});
-	}
-};
-
-function todoApp() {
-	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
-	var action = arguments[1];
-
-	switch (action.type) {
-		case todoAppActions.ADD_TODO:
-			{
-				if (!action.title) {
-					return state;
-				}
-
-				return Object.assign({}, state, {
-					todos: state.todos.concat({
-						completed: false,
-						editing: false,
-
-						title: action.title.trim(),
-						key: Date.now() + state.todos.length
-					})
-				});
-			}
-
-		case todoAppActions.REMOVE_TODO:
-			{
-				state.todos.splice(action.index, 1);
-
-				return Object.assign({}, state, {
-					todos: [].concat(state.todos)
-				});
-			}
-
-		case todoAppActions.TOGGLE_COMPLETION:
-			{
-				var todo = state.todos[action.index];
-
-				state.todos[action.index] = Object.assign({}, todo, {
-					completed: action.completed
-				});
-
-				return Object.assign({}, state, {
-					todos: [].concat(state.todos)
-				});
-			}
-
-		case todoAppActions.START_EDITING:
-			{
-				var _todo = state.todos[action.index];
-
-				state.todos[action.index] = Object.assign({}, _todo, {
-					editing: true
-				});
-
-				return Object.assign({}, state, {
-					todos: [].concat(state.todos)
-				});
-			}
-
-		case todoAppActions.STOP_EDITING:
-			{
-				var _todo2 = state.todos[action.index];
-
-				state.todos[action.index] = Object.assign({}, _todo2, {
-					title: action.title,
-					editing: false
-				});
-
-				return Object.assign({}, state, {
-					todos: [].concat(state.todos)
-				});
-			}
-
-		case todoAppActions.CLEAR_COMPLETED:
-			{
-				return Object.assign({}, state, {
-					todos: state.todos.filter(function (todo) {
-						return todo.completed === false;
-					})
-				});
-			}
-
-		case todoAppActions.TOGGLE_ALL:
-			{
-				return Object.assign({}, state, {
-					todos: state.todos.map(function (todo) {
-						return Object.assign({}, todo, {
-							completed: action.completed
-						});
-					})
-				});
-			}
-
-		default:
-			{
-				return state;
-			}
-	}
-}
-
-},{"../actions/todo-app":5}],8:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-exports.default = url;
-
-var _url = _dereq_('../actions/url');
-
-var urlActions = _interopRequireWildcard(_url);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-var initialState = {
-	path: location.hash.slice(1) || '/'
-};
-
-function url() {
-	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
-	var action = arguments[1];
-
-	switch (action.type) {
-		case urlActions.SET_HASH_STATE:
-			{
-				return Object.assign({}, state, {
-					path: action.path
-				});
-			}
-
-		default:
-			{
-				return state;
-			}
-	}
-}
-
-},{"../actions/url":6}],9:[function(_dereq_,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-	value: true
-});
-
-var _redux = _dereq_('redux');
-
-var _reduxLogger = _dereq_('redux-logger');
-
-var _reduxLogger2 = _interopRequireDefault(_reduxLogger);
-
-var _todoApp = _dereq_('./reducers/todo-app');
-
-var _todoApp2 = _interopRequireDefault(_todoApp);
-
-var _url = _dereq_('./reducers/url');
-
-var _url2 = _interopRequireDefault(_url);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-// Makes a reusable function to create a store. Currently not exported, but
-// could be in the future for testing purposes.
-var createStoreWithMiddleware = (0, _redux.compose)(
-// Adds in store middleware, such as async thunk and logging.
-(0, _redux.applyMiddleware)((0, _reduxLogger2.default)()),
-
-// Hook devtools into our store.
-window.devToolsExtension ? window.devToolsExtension() : function (f) {
-	return f;
-})(_redux.createStore);
-
-// Compose the root reducer from modular reducers.
-exports.default = createStoreWithMiddleware((0, _redux.combineReducers)({
-	// Encapsulates all TodoApp state.
-	todoApp: _todoApp2.default,
-
-	// Manage the URL state.
-	url: _url2.default,
-
-	// Store the last action taken.
-	lastAction: function lastAction(state, action) {
-		return action;
-	}
-}), {});
-
-},{"./reducers/todo-app":7,"./reducers/url":8,"redux":16,"redux-logger":10}],10:[function(_dereq_,module,exports){
+},{"./_getPrototype":11,"./_isHostObject":12,"./isObjectLike":13}],15:[function(_dereq_,module,exports){
 "use strict";
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
@@ -3248,12 +3614,13 @@ function createLogger() {
 }
 
 module.exports = createLogger;
-},{}],11:[function(_dereq_,module,exports){
+},{}],16:[function(_dereq_,module,exports){
 'use strict';
+
+exports.__esModule = true;
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
 
-exports.__esModule = true;
 exports["default"] = applyMiddleware;
 
 var _compose = _dereq_('./compose');
@@ -3306,7 +3673,7 @@ function applyMiddleware() {
     };
   };
 }
-},{"./compose":14}],12:[function(_dereq_,module,exports){
+},{"./compose":19}],17:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3358,7 +3725,7 @@ function bindActionCreators(actionCreators, dispatch) {
   }
   return boundActionCreators;
 }
-},{}],13:[function(_dereq_,module,exports){
+},{}],18:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3380,7 +3747,7 @@ function getUndefinedStateErrorMessage(key, action) {
   var actionType = action && action.type;
   var actionName = actionType && '"' + actionType.toString() + '"' || 'an action';
 
-  return 'Reducer "' + key + '" returned undefined handling ' + actionName + '. ' + 'To ignore an action, you must explicitly return the previous state.';
+  return 'Given action ' + actionName + ', reducer "' + key + '" returned undefined. ' + 'To ignore an action, you must explicitly return the previous state.';
 }
 
 function getUnexpectedStateShapeWarningMessage(inputState, reducers, action) {
@@ -3486,37 +3853,48 @@ function combineReducers(reducers) {
     return hasChanged ? nextState : state;
   };
 }
-},{"./createStore":15,"./utils/warning":17,"lodash/isPlainObject":21}],14:[function(_dereq_,module,exports){
+},{"./createStore":20,"./utils/warning":22,"lodash/isPlainObject":14}],19:[function(_dereq_,module,exports){
 "use strict";
 
 exports.__esModule = true;
 exports["default"] = compose;
 /**
- * Composes single-argument functions from right to left.
+ * Composes single-argument functions from right to left. The rightmost
+ * function can take multiple arguments as it provides the signature for
+ * the resulting composite function.
  *
  * @param {...Function} funcs The functions to compose.
- * @returns {Function} A function obtained by composing functions from right to
- * left. For example, compose(f, g, h) is identical to arg => f(g(h(arg))).
+ * @returns {Function} A function obtained by composing the argument functions
+ * from right to left. For example, compose(f, g, h) is identical to doing
+ * (...args) => f(g(h(...args))).
  */
+
 function compose() {
   for (var _len = arguments.length, funcs = Array(_len), _key = 0; _key < _len; _key++) {
     funcs[_key] = arguments[_key];
   }
 
-  return function () {
-    if (funcs.length === 0) {
-      return arguments.length <= 0 ? undefined : arguments[0];
-    }
+  if (funcs.length === 0) {
+    return function (arg) {
+      return arg;
+    };
+  } else {
+    var _ret = function () {
+      var last = funcs[funcs.length - 1];
+      var rest = funcs.slice(0, -1);
+      return {
+        v: function v() {
+          return rest.reduceRight(function (composed, f) {
+            return f(composed);
+          }, last.apply(undefined, arguments));
+        }
+      };
+    }();
 
-    var last = funcs[funcs.length - 1];
-    var rest = funcs.slice(0, -1);
-
-    return rest.reduceRight(function (composed, f) {
-      return f(composed);
-    }, last.apply(undefined, arguments));
-  };
+    if (typeof _ret === "object") return _ret.v;
+  }
 }
-},{}],15:[function(_dereq_,module,exports){
+},{}],20:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3526,6 +3904,10 @@ exports["default"] = createStore;
 var _isPlainObject = _dereq_('lodash/isPlainObject');
 
 var _isPlainObject2 = _interopRequireDefault(_isPlainObject);
+
+var _symbolObservable = _dereq_('symbol-observable');
+
+var _symbolObservable2 = _interopRequireDefault(_symbolObservable);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
@@ -3565,6 +3947,8 @@ var ActionTypes = exports.ActionTypes = {
  * and subscribe to changes.
  */
 function createStore(reducer, initialState, enhancer) {
+  var _ref2;
+
   if (typeof initialState === 'function' && typeof enhancer === 'undefined') {
     enhancer = initialState;
     initialState = undefined;
@@ -3617,7 +4001,7 @@ function createStore(reducer, initialState, enhancer) {
    * However, the next `dispatch()` call, whether nested or not, will use a more
    * recent snapshot of the subscription list.
    *
-   * 2. The listener should not expect to see all states changes, as the state
+   * 2. The listener should not expect to see all state changes, as the state
    * might have been updated multiple times during a nested `dispatch()` before
    * the listener is called. It is, however, guaranteed that all subscribers
    * registered before the `dispatch()` started will be called with the latest
@@ -3721,19 +4105,59 @@ function createStore(reducer, initialState, enhancer) {
     dispatch({ type: ActionTypes.INIT });
   }
 
+  /**
+   * Interoperability point for observable/reactive libraries.
+   * @returns {observable} A minimal observable of state changes.
+   * For more information, see the observable proposal:
+   * https://github.com/zenparsing/es-observable
+   */
+  function observable() {
+    var _ref;
+
+    var outerSubscribe = subscribe;
+    return _ref = {
+      /**
+       * The minimal observable subscription method.
+       * @param {Object} observer Any object that can be used as an observer.
+       * The observer object should have a `next` method.
+       * @returns {subscription} An object with an `unsubscribe` method that can
+       * be used to unsubscribe the observable from the store, and prevent further
+       * emission of values from the observable.
+       */
+
+      subscribe: function subscribe(observer) {
+        if (typeof observer !== 'object') {
+          throw new TypeError('Expected the observer to be an object.');
+        }
+
+        function observeState() {
+          if (observer.next) {
+            observer.next(getState());
+          }
+        }
+
+        observeState();
+        var unsubscribe = outerSubscribe(observeState);
+        return { unsubscribe: unsubscribe };
+      }
+    }, _ref[_symbolObservable2["default"]] = function () {
+      return this;
+    }, _ref;
+  }
+
   // When a store is created, an "INIT" action is dispatched so that every
   // reducer returns their initial state. This effectively populates
   // the initial state tree.
   dispatch({ type: ActionTypes.INIT });
 
-  return {
+  return _ref2 = {
     dispatch: dispatch,
     subscribe: subscribe,
     getState: getState,
     replaceReducer: replaceReducer
-  };
+  }, _ref2[_symbolObservable2["default"]] = observable, _ref2;
 }
-},{"lodash/isPlainObject":21}],16:[function(_dereq_,module,exports){
+},{"lodash/isPlainObject":14,"symbol-observable":23}],21:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3780,7 +4204,7 @@ exports.combineReducers = _combineReducers2["default"];
 exports.bindActionCreators = _bindActionCreators2["default"];
 exports.applyMiddleware = _applyMiddleware2["default"];
 exports.compose = _compose2["default"];
-},{"./applyMiddleware":11,"./bindActionCreators":12,"./combineReducers":13,"./compose":14,"./createStore":15,"./utils/warning":17}],17:[function(_dereq_,module,exports){
+},{"./applyMiddleware":16,"./bindActionCreators":17,"./combineReducers":18,"./compose":19,"./createStore":20,"./utils/warning":22}],22:[function(_dereq_,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -3798,152 +4222,41 @@ function warning(message) {
   }
   /* eslint-enable no-console */
   try {
-    // This error was thrown as a convenience so that you can use this stack
-    // to find the callsite that caused this warning to fire.
+    // This error was thrown as a convenience so that if you enable
+    // "break on all exceptions" in your console,
+    // it would pause the execution at this line.
     throw new Error(message);
     /* eslint-disable no-empty */
   } catch (e) {}
   /* eslint-enable no-empty */
 }
-},{}],18:[function(_dereq_,module,exports){
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeGetPrototype = Object.getPrototypeOf;
+},{}],23:[function(_dereq_,module,exports){
+(function (global){
+/* global window */
+'use strict';
 
-/**
- * Gets the `[[Prototype]]` of `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {null|Object} Returns the `[[Prototype]]`.
- */
-function getPrototype(value) {
-  return nativeGetPrototype(Object(value));
-}
+module.exports = _dereq_('./ponyfill')(global || window || this);
 
-module.exports = getPrototype;
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./ponyfill":24}],24:[function(_dereq_,module,exports){
+'use strict';
 
-},{}],19:[function(_dereq_,module,exports){
-/**
- * Checks if `value` is a host object in IE < 9.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
- */
-function isHostObject(value) {
-  // Many host objects are `Object` objects that can coerce to strings
-  // despite having improperly defined `toString` methods.
-  var result = false;
-  if (value != null && typeof value.toString != 'function') {
-    try {
-      result = !!(value + '');
-    } catch (e) {}
-  }
-  return result;
-}
+module.exports = function symbolObservablePonyfill(root) {
+	var result;
+	var Symbol = root.Symbol;
 
-module.exports = isHostObject;
+	if (typeof Symbol === 'function') {
+		if (Symbol.observable) {
+			result = Symbol.observable;
+		} else {
+			result = Symbol('observable');
+			Symbol.observable = result;
+		}
+	} else {
+		result = '@@observable';
+	}
 
-},{}],20:[function(_dereq_,module,exports){
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
+	return result;
+};
 
-module.exports = isObjectLike;
-
-},{}],21:[function(_dereq_,module,exports){
-var getPrototype = _dereq_('./_getPrototype'),
-    isHostObject = _dereq_('./_isHostObject'),
-    isObjectLike = _dereq_('./isObjectLike');
-
-/** `Object#toString` result references. */
-var objectTag = '[object Object]';
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/** Used to resolve the decompiled source of functions. */
-var funcToString = Function.prototype.toString;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/** Used to infer the `Object` constructor. */
-var objectCtorString = funcToString.call(Object);
-
-/**
- * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/**
- * Checks if `value` is a plain object, that is, an object created by the
- * `Object` constructor or one with a `[[Prototype]]` of `null`.
- *
- * @static
- * @memberOf _
- * @since 0.8.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a plain object,
- *  else `false`.
- * @example
- *
- * function Foo() {
- *   this.a = 1;
- * }
- *
- * _.isPlainObject(new Foo);
- * // => false
- *
- * _.isPlainObject([1, 2, 3]);
- * // => false
- *
- * _.isPlainObject({ 'x': 0, 'y': 0 });
- * // => true
- *
- * _.isPlainObject(Object.create(null));
- * // => true
- */
-function isPlainObject(value) {
-  if (!isObjectLike(value) ||
-      objectToString.call(value) != objectTag || isHostObject(value)) {
-    return false;
-  }
-  var proto = getPrototype(value);
-  if (proto === null) {
-    return true;
-  }
-  var Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor;
-  return (typeof Ctor == 'function' &&
-    Ctor instanceof Ctor && funcToString.call(Ctor) == objectCtorString);
-}
-
-module.exports = isPlainObject;
-
-},{"./_getPrototype":18,"./_isHostObject":19,"./isObjectLike":20}]},{},[4]);
+},{}]},{},[3]);
