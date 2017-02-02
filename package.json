@@ -5,8 +5,8 @@
   "main": "lib/index.js",
   "scripts": {
     "test": "mocha",
-    "build": "mkdir -p dist ; browserify -t babelify lib/index.js | derequire > dist/todomvc.js",
-    "watch": "watchify -t babelify lib/index.js -o 'derequire > dist/todomvc.js' -v"
+    "build": "mkdir -p dist ; browserify -t babelify lib/index.js -o dist/todomvc.js",
+    "watch": "watchify -t babelify lib/index.js -o dist/todomvc.js -v"
   },
   "repository": {
     "type": "git",
@@ -19,17 +19,16 @@
   },
   "homepage": "https://github.com/tbranyen/todomvc#readme",
   "devDependencies": {
+    "babel-plugin-transform-class-properties": "^6.22.0",
     "babel-preset-es2015": "^6.9.0",
     "babelify": "^7.3.0",
     "browserify": "^13.0.1",
-    "derequire": "^2.0.3",
     "diffhtml-inline-transitions": "^1.1.0",
     "mocha": "^2.5.3",
-    "transform-tagged-diffhtml": "tbranyen/transform-tagged-diffhtml#588e6ed052616dafa87bf735787f7770bc6d8ba5",
     "watchify": "^3.7.0"
   },
   "dependencies": {
-    "diffhtml": "tbranyen/diffhtml#24ad47b9b76bd6a2ccc2882a5f22f69e507d14cc",
+    "diffhtml": "0.9.1",
     "redux": "^3.5.2",
     "redux-logger": "^2.6.1",
     "todomvc-app-css": "^2.0.6",
