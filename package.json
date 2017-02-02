@@ -23,13 +23,13 @@
     "babelify": "^7.3.0",
     "browserify": "^13.0.1",
     "derequire": "^2.0.3",
-    "diffhtml-inline-transitions": "^1.1.0",
+    "diffhtml-inline-transitions": "^1.2.0",
     "mocha": "^2.5.3",
-    "transform-tagged-diffhtml": "tbranyen/transform-tagged-diffhtml#588e6ed052616dafa87bf735787f7770bc6d8ba5",
+    "transform-tagged-diffhtml": "tbranyen/transform-tagged-diffhtml#f13b31329d76f18239a03bbace0990adaf4ba084",
     "watchify": "^3.7.0"
   },
   "dependencies": {
-    "diffhtml": "tbranyen/diffhtml#24ad47b9b76bd6a2ccc2882a5f22f69e507d14cc",
+    "diffhtml": "^0.9.1",
     "redux": "^3.5.2",
     "redux-logger": "^2.6.1",
     "todomvc-app-css": "^2.0.6",

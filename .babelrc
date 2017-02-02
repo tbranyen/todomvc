@@ -1,4 +1,3 @@
 {
-	"presets": ["es2015"],
-	"plugins": ["transform-tagged-diffhtml"]
+	"presets": ["es2015"]
 }
