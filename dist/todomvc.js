@@ -13,13 +13,11 @@ var _uniqueSelector2 = _interopRequireDefault(_uniqueSelector);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-window.unique = _uniqueSelector2.default;
-
 function devTools() {
   var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
   var cacheTask = [];
-  var elements = new Set();
+  var selectors = new Set();
   var extension = null;
   var interval = null;
 
@@ -50,16 +48,17 @@ function devTools() {
 
 
     var selector = (0, _uniqueSelector2.default)(domNode);
+    selectors.add(selector);
 
-    elements.add(selector);
-
-    var startDate = Date.now();
+    var startDate = performance.now();
     var start = function start() {
       return extension.startTransaction({
         domNode: selector,
         markup: markup,
         options: options,
-        state: state
+        state: Object.assign({}, state, state.nextTransaction && {
+          nextTransaction: undefined
+        })
       });
     };
 
@@ -68,12 +67,12 @@ function devTools() {
     }
 
     return function () {
-      var endDate = Date.now();
+      var endDate = performance.now();
+      var patches = JSON.parse(JSON.stringify(transaction.patches));
+      var promises = transaction.promises.slice();
 
       transaction.onceEnded(function () {
         var aborted = transaction.aborted,
-            patches = transaction.patches,
-            promises = transaction.promises,
             completed = transaction.completed;
 
         var stop = function stop() {
@@ -81,7 +80,9 @@ function devTools() {
             domNode: selector,
             markup: markup,
             options: options,
-            state: state,
+            state: Object.assign({}, state, state.nextTransaction && {
+              nextTransaction: undefined
+            }),
             patches: patches,
             promises: promises,
             completed: completed,
@@ -115,11 +116,20 @@ function devTools() {
         MiddlewareCache.push(name);
       });
 
+      var mounts = [];
+
+      selectors.forEach(function (selector) {
+        return mounts.push({
+          selector: selector
+        });
+      });
+
       extension = devToolsExtension().activate({
         VERSION: VERSION,
         internals: {
           MiddlewareCache: MiddlewareCache
-        }
+        },
+        mounts: mounts
       });
 
       if (cacheTask.length) {
@@ -128,9 +138,9 @@ function devTools() {
             return cb();
           });
           cacheTask.length = 0;
-        });
+        }, 250);
       }
-    });
+    }).catch(console.log);
   };
 
   return devToolsTask;
@@ -631,10 +641,14 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
 
 exports.default = inlineTransitions;
+var assign = Object.assign;
+var keys = Object.keys;
+
 // Store maps of elements to handlers that are associated to transitions.
+
 var transitionsMap = {
   attached: new Map(),
   detached: new Map(),
@@ -646,21 +660,17 @@ var transitionsMap = {
 // Internal global transition state handlers, allows us to bind once and match.
 var boundHandlers = [];
 
-var assign = Object.assign,
-    keys = Object.keys;
-
 /**
  * Binds inline transitions to the parent element and triggers for any matching
  * nested children.
  */
-
 function inlineTransitions() {
-  var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+  var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
   // Monitors whenever an element changes an attribute, if the attribute is a
   // valid state name, add this element into the related Set.
   var attributeChanged = function attributeChanged(domNode, name, oldVal, newVal) {
-    var map = transitionsMap[name];
+    var map = transitionsMap[name.slice(2)];
     var isFunction = typeof newVal === 'function';
 
     // Abort early if not a valid transition or if the new value exists, but
@@ -767,6 +777,212 @@ module.exports = exports['default'];
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],3:[function(require,module,exports){
 (function (global){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.syntheticEvents = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var useCapture = ['onload', 'onunload', 'onscroll', 'onfocus', 'onblur', 'onloadstart', 'onprogress', 'onerror', 'onabort', 'onload', 'onloadend', 'onpointerenter', 'onpointerleave'];
+
+var eventNames = [];
+var handlers = new Map();
+var bounded = new Set();
+
+// Ensure we don't get user added event/properties.
+var cloneDoc = document.cloneNode();
+
+// Fill up event names.
+for (var name in cloneDoc) {
+  if (name.indexOf('on') === 0) {
+    eventNames.push(name);
+  }
+}
+
+var SyntheticEvent = function SyntheticEvent() {
+  _classCallCheck(this, SyntheticEvent);
+};
+
+var cloneEvent = function cloneEvent(ev) {
+  var ov = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+  var newEvent = new SyntheticEvent();
+
+  // Copy over original event getters/setters first, will need some extra
+  // intelligence to ensure getters/setters work, thx @kofifus.
+  for (var key in ev) {
+    var desc = Object.getOwnPropertyDescriptor(ev, key);
+
+    if (desc && (desc.get || desc.set)) {
+      Object.defineProperty(newEvent, key, desc);
+    } else {
+      newEvent[key] = ev[key];
+    }
+  }
+
+  // Copy over overrides.
+  for (var _key in ov) {
+    newEvent[_key] = ov[_key];
+  }
+
+  Object.setPrototypeOf(newEvent, ev);
+
+  return newEvent;
+};
+
+var getShadowRoot = function getShadowRoot(node) {
+  while (node = node.parentNode) {
+    if (node.toString() === "[object ShadowRoot]") {
+      return node;
+    }
+  }
+
+  return false;
+};
+
+// Set up global event delegation, once clicked call the saved handlers.
+var bindEventsTo = function bindEventsTo(domNode) {
+  var rootNode = getShadowRoot(domNode) || domNode.ownerDocument;
+  var addEventListener = rootNode.addEventListener;
+
+
+  if (bounded.has(rootNode)) {
+    return false;
+  }
+
+  bounded.add(rootNode);
+
+  eventNames.forEach(function (eventName) {
+    return addEventListener(eventName.slice(2), function (ev) {
+      var target = ev.target;
+      var eventHandler = null;
+
+      var path = ev.path ? ev.path : ev.composedPath ? ev.composedPath() : [];
+
+      // If we were unable to get the path via some kind of standard approach,
+      // build it up manually.
+      if (!path.length) {
+        for (var node = target; node; node = node.parentNode) {
+          path.push(node);
+        }
+      }
+
+      for (var i = 0; i < path.length; i++) {
+        var _node = path[i];
+
+        if (handlers.has(_node)) {
+          var hasEventHandler = handlers.get(_node)[eventName];
+
+          if (hasEventHandler) {
+            eventHandler = hasEventHandler;
+          }
+
+          break;
+        }
+      }
+
+      var syntheticEvent = cloneEvent(ev, {
+        stopPropagation: function stopPropagation() {
+          ev.stopImmediatePropagation();
+          ev.stopPropagation();
+        },
+        preventDefault: function preventDefault() {
+          ev.preventDefault();
+        },
+
+        nativeEvent: ev
+      });
+      eventHandler && eventHandler(syntheticEvent);
+    }, useCapture.includes(eventName) ? true : false);
+  });
+};
+
+var syntheticEvents = function syntheticEvents() {
+  var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+  function syntheticEventsTask() {
+    return function (_ref) {
+      var state = _ref.state,
+          patches = _ref.patches;
+      var NodeCache = state.internals.NodeCache;
+      var SET_ATTRIBUTE = patches.SET_ATTRIBUTE,
+          REMOVE_ATTRIBUTE = patches.REMOVE_ATTRIBUTE;
+
+
+      if (SET_ATTRIBUTE.length) {
+        for (var i = 0; i < SET_ATTRIBUTE.length; i += 3) {
+          var vTree = SET_ATTRIBUTE[i];
+          var _name = SET_ATTRIBUTE[i + 1];
+          var value = SET_ATTRIBUTE[i + 2];
+
+          var domNode = NodeCache.get(vTree);
+          var eventName = _name.toLowerCase();
+
+          // Remove inline event binding from element and add to handlers.
+          if (eventNames.includes(eventName)) {
+            var handler = value;
+            domNode[eventName] = undefined;
+
+            var newHandlers = handlers.get(domNode) || {};
+
+            // If the value passed is a function, that's what we're looking for.
+            if (typeof handler === 'function') {
+              newHandlers[eventName] = handler;
+            }
+            // If the value passed is a string name for a global function, use
+            // that.
+            else if (typeof window[handler] === 'function') {
+                newHandlers[eventName] = window[handler];
+              }
+              // Remove the event association if the value passed was not a
+              // function.
+              else {
+                  delete newHandlers[eventName];
+                }
+
+            handlers.set(domNode, newHandlers);
+            bindEventsTo(domNode);
+          }
+        }
+      }
+
+      if (REMOVE_ATTRIBUTE.length) {
+        for (var _i = 0; _i < REMOVE_ATTRIBUTE.length; _i += 2) {
+          var _vTree = REMOVE_ATTRIBUTE[_i];
+          var _name2 = REMOVE_ATTRIBUTE[_i + 1];
+
+          var _domNode = NodeCache.get(_vTree);
+          var _eventName = _name2.toLowerCase();
+
+          // Remove event binding from element and instead add to handlers.
+          if (eventNames.includes(_eventName)) {
+            var _newHandlers = handlers.get(_domNode) || {};
+            delete _newHandlers[_eventName];
+            handlers.set(_domNode, _newHandlers);
+          }
+        }
+      }
+    };
+  }
+
+  var subscribe = function subscribe() {};
+
+  var unsubscribe = function unsubscribe() {};
+
+  return Object.assign(syntheticEventsTask, { subscribe: subscribe, unsubscribe: unsubscribe });
+};
+
+exports.default = syntheticEvents;
+module.exports = exports['default'];
+
+},{}]},{},[1])(1)
+});
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],4:[function(require,module,exports){
+(function (global){
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.logger = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
@@ -823,8 +1039,8 @@ var format = function format(patches) {
     }
   };
 
-  var ELEMENT = newPatches.ELEMENT;
-  var ATTRIBUTE = newPatches.ATTRIBUTE;
+  var ELEMENT = newPatches.ELEMENT,
+      ATTRIBUTE = newPatches.ATTRIBUTE;
 
 
   patches.forEach(function (changeset) {
@@ -836,47 +1052,42 @@ var format = function format(patches) {
     var REMOVE_ATTRIBUTE = changeset[5];
 
     INSERT_BEFORE.forEach(function (patch) {
-      var _patch = _slicedToArray(patch, 3);
-
-      var vTree = _patch[0];
-      var fragment = _patch[1];
-      var referenceNode = _patch[2];
+      var _patch = _slicedToArray(patch, 3),
+          vTree = _patch[0],
+          fragment = _patch[1],
+          referenceNode = _patch[2];
 
       ELEMENT.INSERT_BEFORE.push({ vTree: vTree, fragment: fragment, referenceNode: referenceNode });
     });
 
     REMOVE_CHILD.forEach(function (patch) {
-      var _patch2 = _slicedToArray(patch, 2);
-
-      var vTree = _patch2[0];
-      var childNode = _patch2[1];
+      var _patch2 = _slicedToArray(patch, 2),
+          vTree = _patch2[0],
+          childNode = _patch2[1];
 
       ELEMENT.REMOVE_CHILD.push({ vTree: vTree, childNode: childNode });
     });
 
     REPLACE_CHILD.forEach(function (patch) {
-      var _patch3 = _slicedToArray(patch, 3);
-
-      var vTree = _patch3[0];
-      var newChildNode = _patch3[1];
-      var oldChildNode = _patch3[2];
+      var _patch3 = _slicedToArray(patch, 3),
+          vTree = _patch3[0],
+          newChildNode = _patch3[1],
+          oldChildNode = _patch3[2];
 
       ELEMENT.REPLACE_CHILD.push({ vTree: vTree, newChildNode: newChildNode, oldChildNode: oldChildNode });
     });
 
     SET_ATTRIBUTE.forEach(function (patch) {
-      var _patch4 = _slicedToArray(patch, 2);
-
-      var vTree = _patch4[0];
-      var attributesList = _patch4[1];
+      var _patch4 = _slicedToArray(patch, 2),
+          vTree = _patch4[0],
+          attributesList = _patch4[1];
 
       var attributes = {};
 
       for (var i = 0; i < attributesList.length; i++) {
-        var _attributesList$i = _slicedToArray(attributesList[i], 2);
-
-        var name = _attributesList$i[0];
-        var value = _attributesList$i[1];
+        var _attributesList$i = _slicedToArray(attributesList[i], 2),
+            name = _attributesList$i[0],
+            value = _attributesList$i[1];
 
         attributes[name] = value;
       }
@@ -885,10 +1096,9 @@ var format = function format(patches) {
     });
 
     REMOVE_ATTRIBUTE.forEach(function (patch) {
-      var _patch5 = _slicedToArray(patch, 2);
-
-      var vTree = _patch5[0];
-      var attributesList = _patch5[1];
+      var _patch5 = _slicedToArray(patch, 2),
+          vTree = _patch5[0],
+          attributesList = _patch5[1];
 
       var attributes = {};
 
@@ -918,14 +1128,14 @@ var format = function format(patches) {
  * @param options - Middleware options
  */
 var log = function log(message, method, color, date, transaction, completed) {
-  var domNode = transaction.domNode;
-  var oldTree = transaction.oldTree;
-  var newTree = transaction.newTree;
-  var patches = transaction.patches;
-  var promises = transaction.promises;
-  var options = transaction.options;
-  var markup = transaction.markup;
-  var state = transaction.state;
+  var domNode = transaction.domNode,
+      oldTree = transaction.oldTree,
+      newTree = transaction.newTree,
+      patches = transaction.patches,
+      promises = transaction.promises,
+      options = transaction.options,
+      markup = transaction.markup,
+      state = transaction.state;
 
   // Shadow DOM rendering...
 
@@ -975,6 +1185,14 @@ exports.default = function (opts) {
     var oldTree = transaction.state.oldTree;
 
 
+    if (transaction.state.isRendering) {
+      console.groupEnd();
+
+      log('%cdiffHTML...render transaction aborted  ', 'group', 'color: #FF78B2', new Date(), transaction);
+
+      console.groupEnd();
+    }
+
     transaction._cloneOldTree = oldTree && cloneTree(oldTree);
 
     /**
@@ -999,7 +1217,178 @@ module.exports = exports['default'];
 },{}]},{},[1])(1)
 });
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
+(function (global){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.verifyState = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
+(function (global){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+var getValue = function getValue(vTree, keyName) {
+  if (vTree instanceof Node && vTree.attributes) {
+    return vTree.attributes[keyName].value || vTree[keyName];
+  } else {
+    return vTree.attributes[keyName];
+  }
+};
+
+var setupDebugger = function setupDebugger(options) {
+  return function (message) {
+    if (options.debug) {
+      throw new Error(message);
+    } else {
+      console.warn(message);
+    }
+  };
+};
+
+var cloneTree = exports.cloneTree = function cloneTree(tree) {
+  return tree ? assign({}, tree, {
+    attributes: assign({}, tree.attributes),
+    childNodes: tree.childNodes.map(function (vTree) {
+      return cloneTree(vTree);
+    })
+  }) : null;
+};
+
+// Support loading diffHTML in non-browser environments.
+var element = global.document ? document.createElement('div') : null;
+
+/**
+ * Decodes HTML strings.
+ *
+ * @see http://stackoverflow.com/a/5796718
+ * @param string
+ * @return unescaped HTML
+ */
+var decodeEntities = exports.decodeEntities = function decodeEntities(string) {
+  // If there are no HTML entities, we can safely pass the string through.
+  if (!element || !string || !string.indexOf || string.indexOf('&') === -1) {
+    return string;
+  }
+
+  element.innerHTML = string;
+  return element.textContent;
+};
+
+var flattenFragments = function flattenFragments(vTree) {
+  vTree.childNodes.forEach(function (childNode, i) {
+    if (childNode.nodeType === 11) {
+      // Flatten the nodes into the position.
+      vTree.childNodes.splice.apply(vTree.childNodes, [i, 1].concat(_toConsumableArray(childNode.childNodes)));
+      childNode.childNodes.forEach(function (childNode) {
+        return flattenFragments(childNode);
+      });
+      return;
+    }
+
+    flattenFragments(childNode);
+  });
+
+  return vTree;
+};
+
+var compareTrees = exports.compareTrees = function compareTrees(options, transaction, oldTree, newTree) {
+  var promises = transaction.promises,
+      NodeCache = transaction.state.internals.NodeCache;
+
+
+  var debug = setupDebugger(options);
+
+  var oldAttrKeys = Object.keys(oldTree.attributes || {}).sort().filter(Boolean);
+  var newAttrKeys = Object.keys(newTree.attributes || {}).sort().filter(Boolean);
+
+  var oldTreeIsNode = oldTree instanceof Node;
+  var oldLabel = oldTreeIsNode ? 'ON DOM NODE' : 'OLD';
+
+  if (oldTreeIsNode) {
+    newTree = flattenFragments(newTree);
+  }
+
+  var oldValue = decodeEntities(oldTree.nodeValue || '').replace(/\r?\n|\r/g, '');
+  var newValue = decodeEntities(newTree.nodeValue || '').replace(/\r?\n|\r/g, '');
+
+  if (oldTree.nodeName.toLowerCase() !== newTree.nodeName.toLowerCase() && newTree.nodeType !== 11) {
+    debug('[Mismatched nodeName] ' + oldLabel + ': ' + oldTree.nodeName + ' NEW TREE: ' + newTree.nodeName);
+  } else if (oldTree.nodeValue && newTree.nodeValue && oldValue !== newValue) {
+    debug('[Mismatched nodeValue] ' + oldLabel + ': ' + oldValue + ' NEW TREE: ' + newValue);
+  } else if (oldTree.nodeType !== newTree.nodeType && newTree.nodeType !== 11) {
+    debug('[Mismatched nodeType] ' + oldLabel + ': ' + oldTree.nodeType + ' NEW TREE: ' + newTree.nodeType);
+  } else if (oldTree.childNodes.length !== newTree.childNodes.length) {
+    debug('[Mismatched childNodes length] ' + oldLabel + ': ' + oldTree.childNodes.length + ' NEW TREE: ' + newTree.childNodes.length);
+  }
+
+  if (oldTreeIsNode && oldTree.attributes) {
+    oldAttrKeys = [].concat(_toConsumableArray(oldTree.attributes)).map(function (s) {
+      return String(s.name);
+    }).sort();
+  }
+
+  if (!oldTreeIsNode && !NodeCache.has(oldTree)) {
+    debug('Tree does not have an associated DOM Node');
+  }
+
+  // Look for attribute differences.
+  if (newTree.nodeType !== 11) {
+    for (var i = 0; i < oldAttrKeys.length; i++) {
+      var _oldValue = getValue(oldTree, oldAttrKeys[i]) || '';
+      var _newValue = getValue(newTree, newAttrKeys[i]) || '';
+
+      // If names are different report it out.
+      if (oldAttrKeys[i].toLowerCase() !== newAttrKeys[i].toLowerCase()) {
+        if (!newAttrKeys[i]) {
+          debug('[Unexpected attribute] ' + oldLabel + ': ' + oldAttrKeys[i] + '="' + _oldValue + '"');
+        } else if (!oldAttrKeys[i]) {
+          debug('[Unexpected attribute] IN NEW TREE: ' + newAttrKeys[i] + '="' + _newValue + '"');
+        } else {
+          debug('[Unexpected attribute] ' + oldLabel + ': ' + oldAttrKeys[i] + '="' + _oldValue + '" IN NEW TREE: ' + newAttrKeys[i] + '="' + _newValue + '"');
+        }
+      }
+      // If values are different
+      else if (!oldTreeIsNode && _oldValue !== _newValue) {
+          debug('[Unexpected attribute] ' + oldLabel + ': ' + oldAttrKeys[i] + '="' + _oldValue + '" IN NEW TREE: ' + newAttrKeys[i] + '="' + _newValue + '"');
+        }
+    }
+
+    for (var _i = 0; _i < oldTree.childNodes.length; _i++) {
+      if (oldTree.childNodes[_i] && newTree.childNodes[_i]) {
+        compareTrees(options, transaction, oldTree.childNodes[_i], newTree.childNodes[_i]);
+      }
+    }
+  }
+};
+
+exports.default = function () {
+  var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+  return function verifyStateTask() {
+    return function (transaction) {
+      var domNode = transaction.domNode,
+          state = transaction.state;
+
+      var oldTree = transaction.oldTree || state.oldTree;
+      var newTree = transaction.newTree;
+
+      if (oldTree && newTree) {
+        compareTrees(options, transaction, oldTree, newTree);
+      }
+
+      transaction.onceEnded(function () {
+        compareTrees(options, transaction, domNode, newTree);
+      });
+    };
+  };
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}]},{},[1])(1)
+});
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],6:[function(require,module,exports){
 (function (process,global){
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
@@ -1022,22 +1411,11 @@ var TransitionCache = new Map();
 // A modest size.
 var size = 10000;
 
-/**
- * Creates a pool to query new or reused values from.
- *
- * @param name
- * @param opts
- * @return {Object} pool
- */
-var memory$1 = {
-  free: new Set(),
-  allocated: new Set(),
-  protected: new Set()
-};
-
-// Prime the memory cache with n objects.
-for (var i = 0; i < size; i++) {
-  memory$1.free.add({
+var free = new Set();
+var allocate = new Set();
+var _protect = new Set();
+var shape = function shape() {
+  return {
     rawNodeName: '',
     nodeName: '',
     nodeValue: '',
@@ -1045,11 +1423,20 @@ for (var i = 0; i < size; i++) {
     key: '',
     childNodes: [],
     attributes: {}
-  });
+  };
+};
+
+// Creates a pool to query new or reused values from.
+var memory$1 = { free: free, allocated: allocate, protected: _protect };
+
+// Prime the free memory pool with VTrees.
+for (var i = 0; i < size; i++) {
+  free.add(shape());
 }
 
-// Cache the values object.
-var freeValues = memory$1.free.values();
+// Cache the values object, we'll refer to this iterator which is faster
+// than calling it every single time. It gets replaced once exhausted.
+var freeValues = free.values();
 
 // Cache VTree objects in a pool which is used to get
 var Pool = {
@@ -1057,27 +1444,31 @@ var Pool = {
   memory: memory$1,
 
   get: function get() {
-    var value = freeValues.next().value || {
-      rawNodeName: '',
-      nodeName: '',
-      nodeValue: '',
-      nodeType: 1,
-      key: '',
-      childNodes: [],
-      attributes: {}
-    };
-    memory$1.free.delete(value);
-    memory$1.allocated.add(value);
+    var _freeValues$next = freeValues.next(),
+        _freeValues$next$valu = _freeValues$next.value,
+        value = _freeValues$next$valu === undefined ? shape() : _freeValues$next$valu,
+        done = _freeValues$next.done;
+
+    // This extra bit of work allows us to avoid calling `free.values()` every
+    // single time an object is needed.
+
+
+    if (done) {
+      freeValues = free.values();
+    }
+
+    free.delete(value);
+    allocate.add(value);
     return value;
   },
   protect: function protect(value) {
-    memory$1.allocated.delete(value);
-    memory$1.protected.add(value);
+    allocate.delete(value);
+    _protect.add(value);
   },
   unprotect: function unprotect(value) {
-    if (memory$1.protected.has(value)) {
-      memory$1.protected.delete(value);
-      memory$1.free.add(value);
+    if (_protect.has(value)) {
+      _protect.delete(value);
+      free.add(value);
     }
   }
 };
@@ -1144,11 +1535,11 @@ var namespace = 'http://www.w3.org/2000/svg';
 // List of SVG elements.
 var elements = ['altGlyph', 'altGlyphDef', 'altGlyphItem', 'animate', 'animateColor', 'animateMotion', 'animateTransform', 'circle', 'clipPath', 'color-profile', 'cursor', 'defs', 'desc', 'ellipse', 'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feComposite', 'feConvolveMatrix', 'feDiffuseLighting', 'feDisplacementMap', 'feDistantLight', 'feFlood', 'feFuncA', 'feFuncB', 'feFuncG', 'feFuncR', 'feGaussianBlur', 'feImage', 'feMerge', 'feMergeNode', 'feMorphology', 'feOffset', 'fePointLight', 'feSpecularLighting', 'feSpotLight', 'feTile', 'feTurbulence', 'filter', 'font', 'font-face', 'font-face-format', 'font-face-name', 'font-face-src', 'font-face-uri', 'foreignObject', 'g', 'glyph', 'glyphRef', 'hkern', 'image', 'line', 'linearGradient', 'marker', 'mask', 'metadata', 'missing-glyph', 'mpath', 'path', 'pattern', 'polygon', 'polyline', 'radialGradient', 'rect', 'set', 'stop', 'svg', 'switch', 'symbol', 'text', 'textPath', 'tref', 'tspan', 'use', 'view', 'vkern'];
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+var _typeof$1 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 // Support loading diffHTML in non-browser environments.
-var g = (typeof global === 'undefined' ? 'undefined' : _typeof(global)) === 'object' ? global : window;
-var element = g.document ? document.createElement('div') : null;
+var g = (typeof global === 'undefined' ? 'undefined' : _typeof$1(global)) === 'object' ? global : window;
+var element$1 = g.document ? document.createElement('div') : null;
 
 /**
  * Decodes HTML strings.
@@ -1159,12 +1550,12 @@ var element = g.document ? document.createElement('div') : null;
  */
 function decodeEntities(string) {
   // If there are no HTML entities, we can safely pass the string through.
-  if (!element || !string || !string.indexOf || !string.includes('&')) {
+  if (!element$1 || !string || !string.indexOf || !string.includes('&')) {
     return string;
   }
 
-  element.innerHTML = string;
-  return element.textContent;
+  element$1.innerHTML = string;
+  return element$1.textContent;
 }
 
 /**
@@ -1175,23 +1566,25 @@ function decodeEntities(string) {
  * @return {String} - An HTML-safe string
  */
 function escape(unescaped) {
-  return unescaped.replace(/["&'<>`]/g, function (match) {
+  return unescaped.replace(/[&<>]/g, function (match) {
     return "&#" + match.charCodeAt(0) + ";";
   });
 }
 
 var marks = new Map();
 var prefix = 'diffHTML';
-var token = 'diff_perf';
+var DIFF_PERF = 'diff_perf';
 
-var hasSearch = typeof location !== 'undefined' && location.search;
+var hasSearch = typeof location !== 'undefined';
 var hasArguments = typeof process !== 'undefined' && process.argv;
-var wantsSearch = hasSearch && location.search.includes(token);
-var wantsArguments = hasArguments && process.argv.includes(token);
-var wantsPerfChecks = wantsSearch || wantsArguments;
 var nop = function nop() {};
 
-var measure = (function (domNode, vTree) {
+var makeMeasure = (function (domNode, vTree) {
+  // Check for these changes on every check.
+  var wantsSearch = hasSearch && location.search.includes(DIFF_PERF);
+  var wantsArguments = hasArguments && process.argv.includes(DIFF_PERF);
+  var wantsPerfChecks = wantsSearch || wantsArguments;
+
   // If the user has not requested they want perf checks, return a nop
   // function.
   if (!wantsPerfChecks) {
@@ -1203,7 +1596,7 @@ var measure = (function (domNode, vTree) {
     if (domNode && domNode.host) {
       name = domNode.host.constructor.name + ' ' + name;
     } else if (typeof vTree.rawNodeName === 'function') {
-      name = vTreevTree.name + ' ' + name;
+      name = vTree.rawNodeName.name + ' ' + name;
     }
 
     var endName = name + '-end';
@@ -1222,88 +1615,101 @@ var measure = (function (domNode, vTree) {
   };
 });
 
-var _typeof$1 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+var _typeof$2 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
+function _toConsumableArray$1(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 var isArray = Array.isArray;
 
-var fragment = '#document-fragment';
+var fragmentName = '#document-fragment';
 
 function createTree(input, attributes, childNodes) {
   for (var _len = arguments.length, rest = Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
     rest[_key - 3] = arguments[_key];
   }
 
-  var isNode = input && (typeof input === 'undefined' ? 'undefined' : _typeof$1(input)) === 'object' && 'parentNode' in input;
+  // If no input was provided then we return an indication as such.
+  if (!input) {
+    return null;
+  }
 
-  if (arguments.length === 1) {
-    if (!input) {
-      return null;
-    }
+  // If the first argument is an array, we assume this is a DOM fragment and
+  // the array are the childNodes.
+  if (isArray(input)) {
+    childNodes = [];
 
-    // If the first argument is an array, we assume this is a DOM fragment and
-    // the array are the childNodes.
-    if (isArray(input)) {
-      return createTree(fragment, input.map(function (vTree) {
-        return createTree(vTree);
-      }));
-    }
-
-    // Crawl an HTML or SVG Element/Text Node etc. for attributes and children.
-    if (isNode) {
-      attributes = {};
-      childNodes = [];
-
-      // When working with a text node, simply save the nodeValue as the
-      // initial value.
-      if (input.nodeType === 3) {
-        childNodes = input.nodeValue;
+    for (var i = 0; i < input.length; i++) {
+      var newTree = createTree(input[i]);
+      if (!newTree) {
+        continue;
       }
-      // Element types are the only kind of DOM node we care about attributes
-      // from. Shadow DOM, Document Fragments, Text, Comment nodes, etc. can
-      // ignore this.
-      else if (input.nodeType === 1 && input.attributes.length) {
-          attributes = {};
+      var isFragment = newTree.nodeType === 11;
 
-          for (var i = 0; i < input.attributes.length; i++) {
-            var _input$attributes$i = input.attributes[i],
-                name = _input$attributes$i.name,
-                value = _input$attributes$i.value;
+      if (typeof newTree.rawNodeName === 'string' && isFragment) {
+        var _childNodes;
 
+        (_childNodes = childNodes).push.apply(_childNodes, _toConsumableArray$1(newTree.childNodes));
+      } else {
+        childNodes.push(newTree);
+      }
+    }
 
-            if (value === '' && name in input) {
-              attributes[name] = input[name];
-              continue;
-            }
+    return createTree(fragmentName, null, childNodes);
+  }
 
-            attributes[name] = value;
+  var isObject = (typeof input === 'undefined' ? 'undefined' : _typeof$2(input)) === 'object';
+
+  // Crawl an HTML or SVG Element/Text Node etc. for attributes and children.
+  if (input && isObject && 'parentNode' in input) {
+    attributes = {};
+    childNodes = [];
+
+    // When working with a text node, simply save the nodeValue as the
+    // initial value.
+    if (input.nodeType === 3) {
+      childNodes = input.nodeValue;
+    }
+    // Element types are the only kind of DOM node we care about attributes
+    // from. Shadow DOM, Document Fragments, Text, Comment nodes, etc. can
+    // ignore this.
+    else if (input.nodeType === 1 && input.attributes.length) {
+        attributes = {};
+
+        for (var _i = 0; _i < input.attributes.length; _i++) {
+          var _input$attributes$_i = input.attributes[_i],
+              name = _input$attributes$_i.name,
+              value = _input$attributes$_i.value;
+
+          // If the attribute's value is empty, seek out the property instead.
+
+          if (value === '' && name in input) {
+            attributes[name] = input[name];
+            continue;
           }
-        }
 
-      // Get the child nodes from an Element or Fragment/Shadow Root.
-      if (input.nodeType === 1 || input.nodeType === 11) {
-        if (input.childNodes.length) {
-          childNodes = [];
-
-          for (var _i = 0; _i < input.childNodes.length; _i++) {
-            if (input.childNodes[_i]) {
-              childNodes[_i] = createTree(input.childNodes[_i]);
-            }
-          }
+          attributes[name] = value;
         }
       }
 
-      var vTree = createTree(input.nodeName, attributes, childNodes);
-      NodeCache.set(vTree, input);
-      return vTree;
+    // Get the child nodes from an Element or Fragment/Shadow Root.
+    if (input.nodeType === 1 || input.nodeType === 11) {
+      if (input.childNodes.length) {
+        childNodes = [];
+
+        for (var _i2 = 0; _i2 < input.childNodes.length; _i2++) {
+          childNodes.push(createTree(input.childNodes[_i2]));
+        }
+      }
     }
 
-    // Assume any object value is a valid VTree object.
-    if ((typeof input === 'undefined' ? 'undefined' : _typeof$1(input)) === 'object') {
-      return input;
-    }
+    var vTree = createTree(input.nodeName, attributes, childNodes);
+    NodeCache.set(vTree, input);
+    return vTree;
+  }
 
-    // Assume it is a DOM Node.
-    return createTree(String(input), null, null);
+  // Assume any object value is a valid VTree object.
+  if (isObject) {
+    return input;
   }
 
   // Support JSX-style children being passed.
@@ -1314,18 +1720,14 @@ function createTree(input, attributes, childNodes) {
   // Allocate a new VTree from the pool.
   var entry = Pool.get();
   var isTextNode = input === '#text';
+  var isString = typeof input === 'string';
 
   entry.key = '';
   entry.rawNodeName = input;
+  entry.nodeName = isString ? input.toLowerCase() : '#document-fragment';
   entry.childNodes.length = 0;
   entry.nodeValue = '';
   entry.attributes = {};
-
-  if (typeof input === 'string') {
-    entry.nodeName = input.toLowerCase();
-  } else {
-    entry.nodeName = fragment;
-  }
 
   if (isTextNode) {
     var _nodes = arguments.length === 2 ? attributes : childNodes;
@@ -1337,7 +1739,7 @@ function createTree(input, attributes, childNodes) {
     return entry;
   }
 
-  if (input === fragment) {
+  if (input === fragmentName || typeof input !== 'string') {
     entry.nodeType = 11;
   } else if (input === '#comment') {
     entry.nodeType = 8;
@@ -1345,28 +1747,27 @@ function createTree(input, attributes, childNodes) {
     entry.nodeType = 1;
   }
 
-  var useAttributes = isArray(attributes) || (typeof attributes === 'undefined' ? 'undefined' : _typeof$1(attributes)) !== 'object';
+  var useAttributes = isArray(attributes) || (typeof attributes === 'undefined' ? 'undefined' : _typeof$2(attributes)) !== 'object';
   var nodes = useAttributes ? attributes : childNodes;
   var nodeArray = isArray(nodes) ? nodes : [nodes];
 
   if (nodes && nodeArray.length) {
-    for (var _i2 = 0; _i2 < nodeArray.length; _i2++) {
-      var newNode = nodeArray[_i2];
+    for (var _i3 = 0; _i3 < nodeArray.length; _i3++) {
+      var newNode = nodeArray[_i3];
 
-      if ((typeof newNode === 'undefined' ? 'undefined' : _typeof$1(newNode)) === 'object') {
-        entry.childNodes[_i2] = createTree(newNode);
+      // Assume objects are vTrees.
+      if ((typeof newNode === 'undefined' ? 'undefined' : _typeof$2(newNode)) === 'object') {
+        entry.childNodes.push(newNode);
       }
       // Cover generate cases where a user has indicated they do not want a
       // node from appearing.
-      else if (typeof newNode !== 'null' && typeof newNode !== 'undefined') {
-          if (newNode !== false) {
-            entry.childNodes[_i2] = createTree('#text', newNode);
-          }
+      else if (newNode) {
+          entry.childNodes.push(createTree('#text', null, newNode));
         }
     }
   }
 
-  if (attributes && (typeof attributes === 'undefined' ? 'undefined' : _typeof$1(attributes)) === 'object' && !isArray(attributes)) {
+  if (attributes && (typeof attributes === 'undefined' ? 'undefined' : _typeof$2(attributes)) === 'object' && !isArray(attributes)) {
     entry.attributes = attributes;
   }
 
@@ -1375,23 +1776,36 @@ function createTree(input, attributes, childNodes) {
     entry.key = String(entry.attributes.src);
   }
 
-  // Set the key prop if passed as an attr.
-  if (entry.attributes && entry.attributes.key) {
+  // Set the `key` prop if passed as an attr, overrides `script[src]`.
+  if (entry.attributes && 'key' in entry.attributes) {
     entry.key = String(entry.attributes.key);
   }
 
   return entry;
 }
 
-var empty = null;
+var empty = {};
 
-// Reuse these maps, it's more performant to clear them than recreate.
+// Reuse these maps, it's more performant to clear them than to recreate.
 var oldKeys = new Map();
 var newKeys = new Map();
 
 var propToAttrMap = {
   className: 'class',
   htmlFor: 'for'
+};
+
+var addTreeOperations = function addTreeOperations(TREE_OPS, patchset) {
+  var INSERT_BEFORE = patchset.INSERT_BEFORE,
+      REMOVE_CHILD = patchset.REMOVE_CHILD,
+      REPLACE_CHILD = patchset.REPLACE_CHILD;
+
+  // We want to look if anything has changed, if nothing has we won't add it to
+  // the patchset.
+
+  if (INSERT_BEFORE || REMOVE_CHILD || REPLACE_CHILD) {
+    TREE_OPS.push(patchset);
+  }
 };
 
 function syncTree(oldTree, newTree, patches) {
@@ -1416,16 +1830,14 @@ function syncTree(oldTree, newTree, patches) {
   // Build up a patchset object to use for tree operations.
 
   var patchset = {
-    INSERT_BEFORE: empty,
-    REMOVE_CHILD: empty,
-    REPLACE_CHILD: empty
+    INSERT_BEFORE: null,
+    REMOVE_CHILD: null,
+    REPLACE_CHILD: null
   };
 
-  // We recurse into all Nodes
+  // Seek out attribute changes first, but only from element Nodes.
   if (newTree.nodeType === 1) {
-    var setAttributes = [];
-    var removeAttributes = [];
-    var oldAttributes = oldTree ? oldTree.attributes : {};
+    var oldAttributes = oldTree ? oldTree.attributes : empty;
     var newAttributes = newTree.attributes;
 
     // Search for sets and changes.
@@ -1437,7 +1849,9 @@ function syncTree(oldTree, newTree, patches) {
         continue;
       }
 
-      oldAttributes[key] = value;
+      if (oldTree) {
+        oldAttributes[key] = value;
+      }
 
       // Alias prop names to attr names for patching purposes.
       if (key in propToAttrMap) {
@@ -1447,18 +1861,39 @@ function syncTree(oldTree, newTree, patches) {
       SET_ATTRIBUTE.push(oldTree || newTree, key, value);
     }
 
-    // Search for removals.
-    for (var _key in oldAttributes) {
-      if (_key in newAttributes) {
-        continue;
+    if (oldTree) {
+      // Search for removals.
+      for (var _key in oldAttributes) {
+        if (_key in newAttributes) {
+          continue;
+        }
+        REMOVE_ATTRIBUTE.push(oldTree || newTree, _key);
+        delete oldAttributes[_key];
       }
-      REMOVE_ATTRIBUTE.push(oldTree || newTree, _key);
-      delete oldAttributes[_key];
     }
   }
 
+  // If both VTrees are text nodes and the values are different, change the
+  // NODE_VALUE.
+  if (newTree.nodeName === '#text') {
+    if (oldTree && oldTree.nodeName === '#text') {
+      if (oldTree.nodeValue !== newTree.nodeName) {
+        NODE_VALUE.push(oldTree, newTree.nodeValue, oldTree.nodeValue);
+        oldTree.nodeValue = newTree.nodeValue;
+        addTreeOperations(TREE_OPS, patchset);
+        return patches;
+      }
+    } else {
+      NODE_VALUE.push(newTree, newTree.nodeValue, null);
+      addTreeOperations(TREE_OPS, patchset);
+      return patches;
+    }
+  }
+
+  // If there was no oldTree specified, this is a new element so scan for
+  // attributes.
   if (!oldTree) {
-    // Dig into all nested children.
+    // Dig into all nested children for attribute changes.
     for (var i = 0; i < newTree.childNodes.length; i++) {
       syncTree(null, newTree.childNodes[i], patches);
     }
@@ -1466,12 +1901,12 @@ function syncTree(oldTree, newTree, patches) {
     return patches;
   }
 
-  var oldTreeName = oldTree.nodeName;
-  var newTreeName = newTree.nodeName;
+  var oldNodeName = oldTree.nodeName;
+  var newNodeName = newTree.nodeName;
 
 
-  if (oldTreeName !== newTreeName) {
-    throw new Error('Sync failure, cannot compare ' + newTreeName + ' with ' + oldTreeName);
+  if (oldNodeName !== newNodeName && newTree.nodeType !== 11) {
+    throw new Error('Sync failure, cannot compare ' + newNodeName + ' with ' + oldNodeName);
   }
 
   var oldChildNodes = oldTree.childNodes;
@@ -1519,61 +1954,75 @@ function syncTree(oldTree, newTree, patches) {
     for (var _i3 = 0; _i3 < newChildNodes.length; _i3++) {
       var oldChildNode = oldChildNodes[_i3];
       var newChildNode = newChildNodes[_i3];
-
-      var _key2 = newChildNode.key;
+      var newKey = newChildNode.key;
 
       // If there is no old element to compare to, this is a simple addition.
 
       if (!oldChildNode) {
-        // Prefer an existing match to a brand new element.
-        var optimalNewNode = null;
-
-        // Prefer existing to new and remove from old position.
-        if (oldKeys.has(_key2)) {
-          optimalNewNode = oldKeys.get(_key2);
-          oldChildNodes.splice(oldChildNodes.indexOf(optimalNewNode), 1);
-        } else {
-          optimalNewNode = newKeys.get(_key2) || newChildNode;
-        }
-
-        if (patchset.INSERT_BEFORE === empty) {
+        if (patchset.INSERT_BEFORE === null) {
           patchset.INSERT_BEFORE = [];
         }
-        patchset.INSERT_BEFORE.push([oldTree, optimalNewNode]);
-        oldChildNodes.push(optimalNewNode);
-        syncTree(null, optimalNewNode, patches);
+        patchset.INSERT_BEFORE.push(oldTree, newChildNode, null);
+        oldChildNodes.push(newChildNode);
+        syncTree(null, newChildNode, patches);
         continue;
       }
 
+      var oldKey = oldChildNode.key;
+
+      // Remove the old Node and insert the new node (aka replace).
+
+      if (!newKeys.has(oldKey) && !oldKeys.has(newKey)) {
+        if (patchset.REPLACE_CHILD === null) {
+          patchset.REPLACE_CHILD = [];
+        }
+        patchset.REPLACE_CHILD.push(newChildNode, oldChildNode);
+        oldChildNodes.splice(oldChildNodes.indexOf(oldChildNode), 1, newChildNode);
+        syncTree(null, newChildNode, patches);
+        continue;
+      }
+      // Remove the old node instead of replacing.
+      else if (!newKeys.has(oldKey)) {
+          if (patchset.REMOVE_CHILD === null) {
+            patchset.REMOVE_CHILD = [];
+          }
+          patchset.REMOVE_CHILD.push(oldChildNode);
+          oldChildNodes.splice(oldChildNodes.indexOf(oldChildNode), 1);
+          _i3 = _i3 - 1;
+          continue;
+        }
+
       // If there is a key set for this new element, use that to figure out
       // which element to use.
-      if (_key2 !== oldChildNode.key) {
-        var _optimalNewNode = newChildNode;
+      if (newKey !== oldKey) {
+        var optimalNewNode = newChildNode;
 
         // Prefer existing to new and remove from old position.
-        if (_key2 && oldKeys.has(_key2)) {
-          _optimalNewNode = oldKeys.get(_key2);
-          oldChildNodes.splice(oldChildNodes.indexOf(_optimalNewNode), 1);
-        } else if (_key2) {
-          _optimalNewNode = newKeys.get(_key2);
+        if (newKey && oldKeys.has(newKey)) {
+          optimalNewNode = oldKeys.get(newKey);
+          oldChildNodes.splice(oldChildNodes.indexOf(optimalNewNode), 1);
+        } else if (newKey) {
+          optimalNewNode = newChildNode;
+
+          // Find attribute changes for this Node.
+          syncTree(null, newChildNode, patches);
         }
 
-        if (patchset.INSERT_BEFORE === empty) {
+        if (patchset.INSERT_BEFORE === null) {
           patchset.INSERT_BEFORE = [];
         }
-        patchset.INSERT_BEFORE.push([oldTree, _optimalNewNode, oldChildNode]);
-        oldChildNodes.splice(_i3, 0, _optimalNewNode);
-        syncTree(null, _optimalNewNode, patches);
+        patchset.INSERT_BEFORE.push(oldTree, optimalNewNode, oldChildNode);
+        oldChildNodes.splice(_i3, 0, optimalNewNode);
         continue;
       }
 
       // If the element we're replacing is totally different from the previous
       // replace the entire element, don't bother investigating children.
       if (oldChildNode.nodeName !== newChildNode.nodeName) {
-        if (patchset.REPLACE_CHILD === empty) {
+        if (patchset.REPLACE_CHILD === null) {
           patchset.REPLACE_CHILD = [];
         }
-        patchset.REPLACE_CHILD.push([newChildNode, oldChildNode]);
+        patchset.REPLACE_CHILD.push(newChildNode, oldChildNode);
         oldTree.childNodes[_i3] = newChildNode;
         syncTree(null, newChildNode, patches);
         continue;
@@ -1592,10 +2041,10 @@ function syncTree(oldTree, newTree, patches) {
 
         // If there is no old element to compare to, this is a simple addition.
         if (!_oldChildNode) {
-          if (patchset.INSERT_BEFORE === empty) {
+          if (patchset.INSERT_BEFORE === null) {
             patchset.INSERT_BEFORE = [];
           }
-          patchset.INSERT_BEFORE.push([oldTree, _newChildNode]);
+          patchset.INSERT_BEFORE.push(oldTree, _newChildNode, null);
           oldChildNodes.push(_newChildNode);
           syncTree(null, _newChildNode, patches);
           continue;
@@ -1604,10 +2053,10 @@ function syncTree(oldTree, newTree, patches) {
         // If the element we're replacing is totally different from the previous
         // replace the entire element, don't bother investigating children.
         if (_oldChildNode.nodeName !== _newChildNode.nodeName) {
-          if (patchset.REPLACE_CHILD === empty) {
+          if (patchset.REPLACE_CHILD === null) {
             patchset.REPLACE_CHILD = [];
           }
-          patchset.REPLACE_CHILD.push([_newChildNode, _oldChildNode]);
+          patchset.REPLACE_CHILD.push(_newChildNode, _oldChildNode);
           oldTree.childNodes[_i4] = _newChildNode;
           syncTree(null, _newChildNode, patches);
           continue;
@@ -1621,7 +2070,7 @@ function syncTree(oldTree, newTree, patches) {
   // lengths to be equal.
   if (oldChildNodes.length !== newChildNodes.length) {
     for (var _i5 = newChildNodes.length; _i5 < oldChildNodes.length; _i5++) {
-      if (patchset.REMOVE_CHILD === empty) {
+      if (patchset.REMOVE_CHILD === null) {
         patchset.REMOVE_CHILD = [];
       }
       patchset.REMOVE_CHILD.push(oldChildNodes[_i5]);
@@ -1630,59 +2079,26 @@ function syncTree(oldTree, newTree, patches) {
     oldChildNodes.length = newChildNodes.length;
   }
 
-  var INSERT_BEFORE = patchset.INSERT_BEFORE,
-      REMOVE_CHILD = patchset.REMOVE_CHILD,
-      REPLACE_CHILD = patchset.REPLACE_CHILD;
-
-  // We want to look if anything has changed, if nothing has we won't add it to
-  // the patchset.
-
-  if (INSERT_BEFORE || REMOVE_CHILD || REPLACE_CHILD) {
-    TREE_OPS.push(patchset);
-  }
-
-  // If both VTrees are text nodes and the values are different, change the
-  // NODE_VALUE.
-  if (oldTree.nodeName === '#text' && newTree.nodeName === '#text') {
-    if (oldTree.nodeValue !== newTree.nodeValue) {
-      oldTree.nodeValue = newTree.nodeValue;
-      NODE_VALUE.push(oldTree, oldTree.nodeValue);
-
-      var _INSERT_BEFORE = patchset.INSERT_BEFORE,
-          _REMOVE_CHILD = patchset.REMOVE_CHILD,
-          _REPLACE_CHILD = patchset.REPLACE_CHILD;
-
-      // We want to look if anything has changed, if nothing has we won't add
-      // it to the patchset.
-
-      if (_INSERT_BEFORE || _REMOVE_CHILD || _REPLACE_CHILD) {
-        TREE_OPS.push(patchset);
-      }
-
-      return patches;
-    }
-  }
+  addTreeOperations(TREE_OPS, patchset);
 
   return patches;
 }
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
-// Code based off of:
+// Adapted implementation from:
 // https://github.com/ashi009/node-fast-html-parser
 
-// This is a very special word in the diffHTML parser. It is the only way it
-// can gain access to dynamic content.
-var TOKEN = '__DIFFHTML__';
-
 var hasNonWhitespaceEx = /\S/;
-var doctypeEx = /<!.*>/ig;
+var doctypeEx = /<!.*>/i;
 var attrEx = /\b([_a-z][_a-z0-9\-]*)\s*(=\s*("([^"]+)"|'([^']+)'|(\S+)))?/ig;
 var spaceEx = /[^ ]/;
+var tokenEx = /__DIFFHTML__([^_]*)__/;
+var tagEx = /<!--[^]*?(?=-->)-->|<(\/?)([a-z\-\_][a-z0-9\-\_]*)\s*([^>]*?)(\/?)>/ig;
 
 var blockText = new Set(['script', 'noscript', 'style', 'code', 'template']);
 
-var selfClosing = new Set(['meta', 'img', 'link', 'input', 'area', 'br', 'hr']);
+var selfClosing = new Set(['meta', 'img', 'link', 'input', 'area', 'br', 'hr', 'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 
 var kElementsClosedByOpening = {
   li: { li: true },
@@ -1701,23 +2117,6 @@ var kElementsClosedByClosing = {
   th: { tr: true, table: true }
 };
 
-var flattenFragments = function flattenFragments(childNodes) {
-  for (var i = 0; i < childNodes.length; i++) {
-    var childNode = childNodes[i];
-
-    if (childNode && childNode.nodeType === 11) {
-      childNodes.splice.apply(childNodes, [i, 1].concat(_toConsumableArray(childNode.childNodes)));
-
-      // Reset the loop.
-      i = 0;
-    } else if (childNode) {
-      flattenFragments(childNode.childNodes);
-    } else {
-      childNodes.splice(i, 1);
-    }
-  }
-};
-
 /**
  * Interpolate dynamic supplemental values from the tagged template into the
  * tree.
@@ -1726,41 +2125,49 @@ var flattenFragments = function flattenFragments(childNodes) {
  * @param string
  * @param supplemental
  */
-var interpolateValues = function interpolateValues(currentParent, string, supplemental) {
-  if (string && string.includes(TOKEN)) {
-    var childNodes = [];
-    var parts = string.split(TOKEN);
-    var length = parts.length;
+var interpolateValues = function interpolateValues(currentParent, string) {
+  var _currentParent$childN;
 
+  var supplemental = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
-    for (var i = 0; i < parts.length; i++) {
-      var value = parts[i];
-
-      if (i === 0 || value) {
-        // If the first text node has relevant text, put it in, otherwise
-        // discard. This mimicks how the browser works and is generally easier
-        // to work with (when using tagged template tags).
-        if (hasNonWhitespaceEx.test(value)) {
-          childNodes.push(createTree('#text', value));
-        }
-
-        // If we are in the second iteration, this means the whitespace has
-        // been trimmed and we can pull out dynamic interpolated values.
-        // Flatten all fragments found in the tree. They are used as containers
-        // and are not reflected in the DOM Tree.
-        if (--length > 0) {
-          childNodes.push(supplemental.children.shift());
-          flattenFragments(childNodes);
-        }
-      }
-    }
-
-    currentParent.childNodes.push.apply(currentParent.childNodes, childNodes);
-  }
   // If this is text and not a doctype, add as a text node.
-  else if (string && string.length && !doctypeEx.exec(string)) {
-      currentParent.childNodes.push(createTree('#text', string));
+  if (string && !doctypeEx.test(string) && !tokenEx.test(string)) {
+    return currentParent.childNodes.push(createTree('#text', string));
+  }
+
+  var childNodes = [];
+  var parts = string.split(tokenEx);
+  var length = parts.length;
+
+
+  for (var i = 0; i < parts.length; i++) {
+    var value = parts[i];
+
+    if (!value) {
+      continue;
     }
+
+    // When we split on the token expression, the capture group will replace
+    // the token's position. So all we do is ensure that we're on an odd
+    // index and then we can source the correct value.
+    if (i % 2 === 1) {
+      var innerTree = supplemental.children[value];
+      if (!innerTree) {
+        continue;
+      }
+      var isFragment = innerTree.nodeType === 11;
+
+      if (typeof innerTree.rawNodeName === 'string' && isFragment) {
+        childNodes.push.apply(childNodes, _toConsumableArray(innerTree.childNodes));
+      } else {
+        childNodes.push(innerTree);
+      }
+    } else if (!doctypeEx.test(value)) {
+      childNodes.push(createTree('#text', value));
+    }
+  }
+
+  (_currentParent$childN = currentParent.childNodes).push.apply(_currentParent$childN, childNodes);
 };
 
 /**
@@ -1775,53 +2182,64 @@ var interpolateValues = function interpolateValues(currentParent, string, supple
  * @return {Object} vTree
  */
 var HTMLElement = function HTMLElement(nodeName, rawAttrs, supplemental) {
+  var match = null;
+
   // Support dynamic tag names like: `<${MyComponent} />`.
-  if (nodeName === TOKEN) {
-    return HTMLElement(supplemental.tags.shift(), rawAttrs, supplemental);
+  if (match = tokenEx.exec(nodeName)) {
+    return HTMLElement(supplemental.tags[match[1]], rawAttrs, supplemental);
   }
 
   var attributes = {};
 
   // Migrate raw attributes into the attributes object used by the VTree.
-
-  var _loop = function _loop(match) {
-    var name = match[1];
-    var value = match[6] || match[5] || match[4] || match[1];
+  for (var _match; _match = attrEx.exec(rawAttrs || '');) {
+    var name = _match[1];
+    var value = _match[6] || _match[5] || _match[4] || _match[1];
+    var tokenMatch = value.match(tokenEx);
 
     // If we have multiple interpolated values in an attribute, we must
     // flatten to a string. There are no other valid options.
-    if (value.indexOf(TOKEN) > -1 && value !== TOKEN) {
-      attributes[name] = '';
+    if (tokenMatch && tokenMatch.length) {
+      var parts = value.split(tokenEx);
+      var length = parts.length;
 
-      // Break the attribute down and replace each dynamic interpolation.
-      value.split(TOKEN).forEach(function (part, index, array) {
-        attributes[name] += part;
 
-        // Only interpolate up to the last element.
-        if (index !== array.length - 1) {
-          attributes[name] += supplemental.attributes.shift();
+      var hasToken = tokenEx.exec(name);
+      var newName = hasToken ? supplemental.attributes[hasToken[1]] : name;
+
+      for (var i = 0; i < parts.length; i++) {
+        var _value = parts[i];
+
+        if (!_value) {
+          continue;
         }
-      });
-    } else if (name === TOKEN) {
-      var nameAndValue = supplemental.attributes.shift();
 
-      if (nameAndValue) {
-        attributes[nameAndValue] = nameAndValue;
+        // When we split on the token expression, the capture group will
+        // replace the token's position. So all we do is ensure that we're on
+        // an odd index and then we can source the correct value.
+        if (i % 2 === 1) {
+          if (attributes[newName]) {
+            attributes[newName] += supplemental.attributes[_value];
+          } else {
+            attributes[newName] = supplemental.attributes[_value];
+          }
+        } else {
+          if (attributes[newName]) {
+            attributes[newName] += _value;
+          } else {
+            attributes[newName] = _value;
+          }
+        }
       }
-    } else if (value === TOKEN) {
-      attributes[name] = supplemental.attributes.shift();
+    } else if (tokenMatch = tokenEx.exec(name)) {
+      var nameAndValue = supplemental.attributes[tokenMatch[1]];
+      var _hasToken = tokenEx.exec(value);
+      var getValue = _hasToken ? supplemental.attributes[_hasToken[1]] : value;
+
+      attributes[nameAndValue] = value === '""' ? '' : getValue;
     } else {
-      attributes[name] = value;
+      attributes[name] = value === '""' ? '' : value;
     }
-
-    // Look for empty attributes.
-    if (match[6] === '""') {
-      attributes[name] = '';
-    }
-  };
-
-  for (var match; match = attrEx.exec(rawAttrs || '');) {
-    _loop(match);
   }
 
   return createTree(nodeName, attributes, []);
@@ -1842,6 +2260,7 @@ function parse(html, supplemental) {
   var stack = [root];
   var currentParent = root;
   var lastTextPos = -1;
+  var preLastTextPos = -1;
 
   // If there are no HTML elements, treat the passed in html as a single
   // text node.
@@ -1850,14 +2269,16 @@ function parse(html, supplemental) {
     return root;
   }
 
-  var tagEx = /<!--[^]*?(?=-->)-->|<(\/?)([a-z\-\_][a-z0-9\-\_]*)\s*([^>]*?)(\/?)>/ig;
-
   // Look through the HTML markup for valid tags.
   for (var match, text; match = tagEx.exec(html);) {
     if (lastTextPos > -1) {
       if (lastTextPos + match[0].length < tagEx.lastIndex) {
         text = html.slice(lastTextPos, tagEx.lastIndex - match[0].length);
-        interpolateValues(currentParent, text, supplemental);
+
+        // Do not process leading whitespace in a tagged template.
+        if (preLastTextPos === -1 ? hasNonWhitespaceEx.test(text) : text) {
+          interpolateValues(currentParent, text, supplemental);
+        }
       }
     }
 
@@ -1871,9 +2292,10 @@ function parse(html, supplemental) {
       }
     }
 
+    preLastTextPos = lastTextPos;
     lastTextPos = tagEx.lastIndex;
 
-    // This is a comment.
+    // This is a comment (TODO support these).
     if (match[0][1] === '!') {
       continue;
     }
@@ -1909,30 +2331,6 @@ function parse(html, supplemental) {
         }
 
         var newText = html.slice(match.index + match[0].length, index);
-
-        // TODO Determine if a closing tag is present.
-        //if (options.strict) {
-        //  const nodeName = currentParent.rawNodeName;
-
-        //  // Find a subset of the markup passed in to validate.
-        //  const markup = markup.slice(
-        //    tagEx.lastIndex - match[0].length
-        //  ).split('\n').slice(0, 3);
-
-        //  console.log(markup);
-
-        //  // Position the caret next to the first non-whitespace character.
-        //  const caret = Array(spaceEx.exec(markup[0]).index).join(' ') + '^';
-
-        //  // Craft the warning message and inject it into the markup.
-        //  markup.splice(1, 0, `${caret}
-        //Invali markup. Saw ${match[2]}, expected ${nodeName}
-        //  `);
-
-        //  // Throw an error message if the markup isn't what we expected.
-        //  throw new Error(`\n\n${markup.join('\n')}`);
-        //}
-
         interpolateValues(currentParent, newText.trim(), supplemental);
       }
     }
@@ -1954,20 +2352,22 @@ function parse(html, supplemental) {
         throw new Error('\n\n' + markup.join('\n'));
       }
 
+      var tokenMatch = tokenEx.exec(match[2]);
+
       // </ or /> or <br> etc.
       while (currentParent) {
         // Self closing dynamic nodeName.
-        if (match[2] === TOKEN && match[4] === '/') {
+        if (match[4] === '/' && tokenMatch) {
           stack.pop();
           currentParent = stack[stack.length - 1];
 
           break;
         }
         // Not self-closing, so seek out the next match.
-        else if (match[2] === TOKEN) {
-            var _value = supplemental.tags.shift();
+        else if (tokenMatch) {
+            var value = supplemental.tags[tokenMatch[1]];
 
-            if (currentParent.nodeName === _value) {
+            if (currentParent.rawNodeName === value) {
               stack.pop();
               currentParent = stack[stack.length - 1];
 
@@ -1975,7 +2375,7 @@ function parse(html, supplemental) {
             }
           }
 
-        if (currentParent.rawNodeName == match[2]) {
+        if (currentParent.rawNodeName === match[2]) {
           stack.pop();
           currentParent = stack[stack.length - 1];
 
@@ -1985,7 +2385,6 @@ function parse(html, supplemental) {
 
           // Trying to close current tag, and move on
           if (tag) {
-
             if (tag[match[2]]) {
               stack.pop();
               currentParent = stack[stack.length - 1];
@@ -2006,7 +2405,9 @@ function parse(html, supplemental) {
 
   // Ensure that all values are properly interpolated through the remaining
   // markup after parsing.
-  interpolateValues(currentParent, remainingText, supplemental);
+  if (remainingText) {
+    interpolateValues(currentParent, remainingText, supplemental);
+  }
 
   // This is an entire document, so only allow the HTML children to be
   // body or head.
@@ -2065,6 +2466,10 @@ function parse(html, supplemental) {
     })();
   }
 
+  // Reset regular expression positions per parse.
+  attrEx.lastIndex = 0;
+  tagEx.lastIndex = 0;
+
   return root;
 }
 
@@ -2082,10 +2487,12 @@ var internals = Object.freeze({
 	elements: elements,
 	decodeEntities: decodeEntities,
 	escape: escape,
-	measure: measure,
+	makeMeasure: makeMeasure,
 	Pool: Pool,
 	parse: parse
 });
+
+var _typeof$3 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 /**
  * If diffHTML is rendering anywhere asynchronously, we need to wait until it
@@ -2104,8 +2511,31 @@ function schedule(transaction) {
   // transaction into a queue.
 
   if (state.isRendering) {
-    state.nextTransaction = transaction;
-    return transaction.abort();
+    var _ret = function () {
+      // Resolve an existing transaction that we're going to pave over in the
+      // next statement.
+      if (state.nextTransaction) {
+        state.nextTransaction.promises[0].resolve(state.nextTransaction);
+      }
+
+      // Set a pointer to this current transaction to render immediatately after
+      // the current transaction completes.
+      state.nextTransaction = transaction;
+
+      var deferred = {};
+      var resolver = new Promise(function (resolve) {
+        return deferred.resolve = resolve;
+      });
+
+      resolver.resolve = deferred.resolve;
+      transaction.promises = [resolver];
+
+      return {
+        v: transaction.abort()
+      };
+    }();
+
+    if ((typeof _ret === 'undefined' ? 'undefined' : _typeof$3(_ret)) === "object") return _ret.v;
   }
 
   // Indicate we are now rendering a transaction for this DOM Node.
@@ -2132,51 +2562,9 @@ function shouldUpdate(transaction) {
   measure('should update');
 }
 
-//function reconcileComponents(oldTree, newTree) {
-//  // Stateful components have a very limited API, designed to be fully
-//  // implemented by a higher-level abstraction. The only method ever called
-//  // is `render`. It is up to a higher level abstraction on how to handle the
-//  // changes.
-//  for (let i = 0; i < newTree.childNodes.length; i++) {
-//    const oldChild = oldTree && oldTree.childNodes[i];
-//    const newChild = newTree.childNodes[i];
-//
-//    // If incoming tree is a component, flatten down to tree for now.
-//    if (newChild && typeof newChild.rawNodeName === 'function') {
-//      const oldCtor = oldChild && oldChild.rawNodeName;
-//      const newCtor = newChild.rawNodeName;
-//      const children = newChild.childNodes;
-//      const props = assign({}, newChild.attributes, { children });
-//      const canNew = newCtor.prototype && newCtor.prototype.render;
-//
-//      // If the component has already been initialized, we can reuse it.
-//      const oldInstance = oldCtor === newCtor && ComponentCache.get(oldChild);
-//      const newInstance = !oldInstance && canNew && new newCtor(props);
-//      const instance = oldInstance || newInstance;
-//      const renderTree = createTree(
-//        instance ? instance.render(props) : newCtor(props)
-//      );
-//
-//      // Build a new tree from the render, and use this as the current tree.
-//      newTree.childNodes[i] = renderTree;
-//
-//      // Cache this new current tree.
-//      if (instance) {
-//        ComponentCache.set(renderTree, instance);
-//      }
-//
-//      // Recursively update trees.
-//      reconcileComponents(oldChild, renderTree);
-//    }
-//    else {
-//      reconcileComponents(oldChild, newChild);
-//    }
-//  }
-//}
-
 function reconcileTrees(transaction) {
   var state = transaction.state,
-      measure$$1 = transaction.state.measure,
+      measure = transaction.state.measure,
       domNode = transaction.domNode,
       markup = transaction.markup,
       options = transaction.options;
@@ -2185,7 +2573,7 @@ function reconcileTrees(transaction) {
   var inner = options.inner;
 
 
-  measure$$1('reconcile trees');
+  measure('reconcile trees');
 
   // This looks for changes in the DOM from what we'd expect. This means we
   // need to rebuild the old Virtual Tree. This allows for keeping our tree
@@ -2222,10 +2610,15 @@ function reconcileTrees(transaction) {
 
   // This is HTML Markup, so we need to parse it.
   if (typeof markup === 'string') {
+    var _parse = parse(markup, null, options),
+        childNodes = _parse.childNodes;
+
     // If we are dealing with innerHTML, use all the Nodes. If we're dealing
     // with outerHTML, we can only support diffing against a single element,
     // so pick the first one.
-    transaction.newTree = createTree(parse(markup, null, options).childNodes);
+
+
+    transaction.newTree = createTree(!inner && childNodes.length === 1 ? childNodes[0] : childNodes);
   }
 
   // Only create a document fragment for inner nodes if the user didn't already
@@ -2236,7 +2629,15 @@ function reconcileTrees(transaction) {
           nodeName = _transaction$oldTree.nodeName,
           attributes = _transaction$oldTree.attributes;
 
-      transaction.newTree = createTree(nodeName, attributes, markup);
+      var newTree = createTree(markup);
+      var isFragment = newTree.nodeType === 11;
+
+      transaction.newTree = createTree(nodeName, attributes, newTree);
+
+      // Flatten the fragment.
+      if (typeof newTree.rawNodeName === 'string' && isFragment) {
+        transaction.newTree.childNodes = newTree.childNodes;
+      }
     }
 
     // Everything else gets passed into `createTree` to be figured out.
@@ -2244,32 +2645,7 @@ function reconcileTrees(transaction) {
         transaction.newTree = createTree(markup);
       }
 
-  // FIXME: Huge Hack at the moment to make it easier to work with components.
-  //reconcileComponents(state.oldTree, transaction.newTree);
-
-  measure$$1('reconcile trees');
-}
-
-function syncTrees(transaction) {
-  var _transaction$state = transaction.state,
-      measure = _transaction$state.measure,
-      oldTree = _transaction$state.oldTree,
-      newTree = transaction.newTree;
-
-
-  measure('sync trees');
-
-  // Do a global replace of the element, unable to do this at a lower level.
-  if (oldTree.nodeName !== newTree.nodeName) {
-    transaction.patches = { TREE_OPS: [{ REPLACE_CHILD: [newTree, oldTree] }] };
-    transaction.oldTree = transaction.state.oldTree = newTree;
-  }
-  // Otherwise only diff the children.
-  else {
-      transaction.patches = syncTree(oldTree, newTree);
-    }
-
-  measure('sync trees');
+  measure('reconcile trees');
 }
 
 /**
@@ -2281,7 +2657,7 @@ function syncTrees(transaction) {
  * @param {Object} - Document to create Nodes in
  * @return {Object} - A DOM Node matching the vTree
  */
-function makeNode(vTree) {
+function createNode(vTree) {
   var doc = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : document;
 
   if (!vTree) {
@@ -2296,19 +2672,17 @@ function makeNode(vTree) {
   }
 
   var nodeName = vTree.nodeName,
-      childNodes = vTree.childNodes,
-      attributes = vTree.attributes,
-      nodeValue = vTree.nodeValue;
+      _vTree$childNodes = vTree.childNodes,
+      childNodes = _vTree$childNodes === undefined ? [] : _vTree$childNodes;
 
   // Will vary based on the properties of the VTree.
 
   var domNode = null;
 
-  // If we're dealing with a Text Node, we need to use the special DOM method,
-  // since createElement does not understand the nodeName '#text'.
-  // All other nodes can be created through createElement.
+  // Create empty text elements. They will get filled in during the patch
+  // process.
   if (nodeName === '#text') {
-    domNode = doc.createTextNode(decodeEntities(nodeValue));
+    domNode = doc.createTextNode(vTree.nodeValue);
   }
   // Support dynamically creating document fragments.
   else if (nodeName === '#document-fragment') {
@@ -2330,15 +2704,17 @@ function makeNode(vTree) {
   NodeCache.set(vTree, domNode);
 
   // Append all the children into the domNode, making sure to run them
-  // through this `make` function as well.
+  // through this `createNode` function as well.
   for (var i = 0; i < childNodes.length; i++) {
-    domNode.appendChild(makeNode(childNodes[i]));
+    domNode.appendChild(createNode(childNodes[i], doc));
   }
 
   return domNode;
 }
 
-var _typeof$3 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+var _typeof$5 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
+function _toConsumableArray$3(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 // Available transition states.
 var stateNames = ['attached', 'detached', 'replaced', 'attributeChanged', 'textChanged'];
@@ -2349,26 +2725,21 @@ stateNames.forEach(function (stateName) {
 });
 
 function addTransitionState(stateName, callback) {
-  if (!stateName) {
-    throw new Error('Missing transition state name');
+  if (!stateName || !stateNames.includes(stateName)) {
+    throw new Error('Invalid state name \'' + stateName + '\'');
   }
 
   if (!callback) {
     throw new Error('Missing transition state callback');
   }
 
-  // Not a valid state name.
-  if (stateNames.indexOf(stateName) === -1) {
-    throw new Error('Invalid state name: ' + stateName);
-  }
-
   TransitionCache.get(stateName).add(callback);
 }
 
 function removeTransitionState(stateName, callback) {
-  // Not a valid state name.
+  // Only validate the stateName if the caller provides one.
   if (stateName && !stateNames.includes(stateName)) {
-    throw new Error('Invalid state name ' + stateName);
+    throw new Error('Invalid state name \'' + stateName + '\'');
   }
 
   // Remove all transition callbacks from state.
@@ -2382,42 +2753,65 @@ function removeTransitionState(stateName, callback) {
     }
     // Remove all callbacks.
     else {
-        for (var _stateName in stateNames) {
-          TransitionCache.get(_stateName).clear();
+        for (var i = 0; i < stateNames.length; i++) {
+          TransitionCache.get(stateNames[i]).clear();
         }
       }
 }
 
-function runTransitions(set) {
+function runTransitions(setName) {
   for (var _len = arguments.length, args = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
     args[_key - 1] = arguments[_key];
   }
 
+  var set = TransitionCache.get(setName);
   var promises = [];
 
-  set.forEach(function (callback) {
-    if (typeof callback === 'function') {
-      var retVal = callback.apply(undefined, args);
+  if (!set.size) {
+    return promises;
+  }
 
-      // Is a `thennable` object or Native Promise.
-      if ((typeof retVal === 'undefined' ? 'undefined' : _typeof$3(retVal)) === 'object' && retVal.then) {
-        promises.push(retVal);
-      }
+  // Ignore text nodes.
+  if (setName !== 'textChanged' && args[0].nodeType === 3) {
+    return promises;
+  }
+
+  // Run each transition callback, if on the attached/detached.
+  set.forEach(function (callback) {
+    var retVal = callback.apply(undefined, args);
+
+    // Is a `thennable` object or Native Promise.
+    if ((typeof retVal === 'undefined' ? 'undefined' : _typeof$5(retVal)) === 'object' && retVal.then) {
+      promises.push(retVal);
     }
   });
+
+  if (setName === 'attached' || setName === 'detached') {
+    var element = args[0];
+
+    [].concat(_toConsumableArray$3(element.childNodes)).forEach(function (childNode) {
+      promises.push.apply(promises, _toConsumableArray$3(runTransitions.apply(undefined, [setName, childNode].concat(_toConsumableArray$3(args.slice(1))))));
+    });
+  }
 
   return promises;
 }
 
-var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
+var _typeof$4 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
-var _typeof$2 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
-
-function _toConsumableArray$1(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+function _toConsumableArray$2(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 var blockText$1 = new Set(['script', 'noscript', 'style', 'code', 'template']);
 
-function patchNode$$1(patches, state) {
+var removeAttribute = function removeAttribute(domNode, name) {
+  domNode.removeAttribute(name);
+
+  if (name in domNode) {
+    domNode[name] = undefined;
+  }
+};
+
+function patchNode$$1(patches) {
   var promises = [];
   var TREE_OPS = patches.TREE_OPS,
       NODE_VALUE = patches.NODE_VALUE,
@@ -2427,25 +2821,43 @@ function patchNode$$1(patches, state) {
   // Set attributes.
 
   if (SET_ATTRIBUTE.length) {
-    (function () {
+    for (var i = 0; i < SET_ATTRIBUTE.length; i += 3) {
+      var vTree = SET_ATTRIBUTE[i];
+      var _name = SET_ATTRIBUTE[i + 1];
+      var value = decodeEntities(SET_ATTRIBUTE[i + 2]);
+      var domNode = createNode(vTree);
+      var attributeChanged = TransitionCache.get('attributeChanged');
+      var oldValue = domNode.getAttribute(_name);
+      var newPromises = runTransitions('attributeChanged', domNode, _name, oldValue, value);
+
       // Triggered either synchronously or asynchronously depending on if a
       // transition was invoked.
-      var mutationCallback = function mutationCallback(domNode, name, value) {
-        var isObject = (typeof value === 'undefined' ? 'undefined' : _typeof$2(value)) === 'object';
-        var isFunction = typeof value === 'function';
+      var isObject = (typeof value === 'undefined' ? 'undefined' : _typeof$4(value)) === 'object';
+      var isFunction = typeof value === 'function';
 
-        // Support patching an object representation of the style object.
-        if (!isObject && !isFunction && name) {
-          domNode.setAttribute(name, value == null ? '' : value);
+      // Events must be lowercased otherwise they will not be set correctly.
+      var name = _name.indexOf('on') === 0 ? _name.toLowerCase() : _name;
 
-          // Allow the user to find the real value in the DOM Node as a
-          // property.
+      // Normal attribute value.
+      if (!isObject && !isFunction && name) {
+        var noValue = value === null || value === undefined;
+
+        // Allow the user to find the real value in the DOM Node as a
+        // property.
+        try {
           domNode[name] = value;
-        } else if (isObject && name === 'style') {
+        } catch (unhandledException) {}
+
+        // Set the actual attribute, this will ensure attributes like
+        // `autofocus` aren't reset by the property call above.
+        domNode.setAttribute(name, noValue ? '' : value);
+      }
+      // Support patching an object representation of the style object.
+      else if (isObject && name === 'style') {
           var keys = Object.keys(value);
 
-          for (var i = 0; i < keys.length; i++) {
-            domNode.style[keys[i]] = value[keys[i]];
+          for (var _i = 0; _i < keys.length; _i++) {
+            domNode.style[keys[_i]] = value[keys[_i]];
           }
         } else if (typeof value !== 'string') {
           // We remove and re-add the attribute to trigger a change in a web
@@ -2459,85 +2871,45 @@ function patchNode$$1(patches, state) {
           domNode.setAttribute(name, '');
 
           // Since this is a property value it gets set directly on the node.
-          domNode[name] = value;
+          try {
+            domNode[name] = value;
+          } catch (unhandledException) {}
         }
-      };
 
-      var _loop = function _loop(i) {
-        var vTree = SET_ATTRIBUTE[i];
-        var name = SET_ATTRIBUTE[i + 1];
-        var value = SET_ATTRIBUTE[i + 2];
-
-        var domNode = makeNode(vTree);
-
-        var attributeChanged = TransitionCache.get('attributeChanged');
-
-        if (attributeChanged.size) {
-          var oldValue = domNode.getAttribute(name);
-
-          var newPromises = runTransitions(attributeChanged, domNode, name, oldValue, value);
-
-          if (newPromises.length) {
-            Promise.all(newPromises).then(function () {
-              mutationCallback(domNode, name, value);
-            });
-          } else {
-            mutationCallback(domNode, name, value);
-          }
-        } else {
-          mutationCallback(domNode, name, value);
-        }
-      };
-
-      for (var i = 0; i < SET_ATTRIBUTE.length; i += 3) {
-        _loop(i);
+      if (newPromises.length) {
+        promises.push.apply(promises, _toConsumableArray$2(newPromises));
       }
-    })();
+    }
   }
 
   // Remove attributes.
   if (REMOVE_ATTRIBUTE.length) {
-    for (var i = 0; i < REMOVE_ATTRIBUTE.length; i += 2) {
-      var vTree = REMOVE_ATTRIBUTE[i];
-      var _name = REMOVE_ATTRIBUTE[i + 1];
+    var _loop = function _loop(_i2) {
+      var vTree = REMOVE_ATTRIBUTE[_i2];
+      var name = REMOVE_ATTRIBUTE[_i2 + 1];
+      var domNode = NodeCache.get(vTree);
+      var attributeChanged = TransitionCache.get('attributeChanged');
+      var oldValue = domNode.getAttribute(name);
+      var newPromises = runTransitions('attributeChanged', domNode, name, oldValue, null);
 
-      var _domNode = makeNode(vTree);
-
-      _domNode.removeAttribute(_name);
-
-      if (_name in _domNode) {
-        _domNode[_name] = undefined;
-      }
-    }
-  }
-
-  // Change all nodeValues.
-  if (NODE_VALUE.length) {
-    for (var _i = 0; _i < NODE_VALUE.length; _i += 2) {
-      var _vTree = NODE_VALUE[_i];
-      var nodeValue = NODE_VALUE[_i + 1];
-
-      var _domNode2 = NodeCache.get(_vTree);
-      var parentNode = _domNode2.parentNode;
-
-
-      if (nodeValue.includes('&')) {
-        _domNode2.nodeValue = decodeEntities(escape(nodeValue));
+      if (newPromises.length) {
+        Promise.all(newPromises).then(function () {
+          return removeAttribute(domNode, name);
+        });
+        promises.push.apply(promises, _toConsumableArray$2(newPromises));
       } else {
-        _domNode2.nodeValue = escape(nodeValue);
+        removeAttribute(domNode, name);
       }
+    };
 
-      if (parentNode) {
-        if (blockText$1.has(parentNode.nodeName.toLowerCase())) {
-          parentNode.nodeValue = escape(nodeValue);
-        }
-      }
+    for (var _i2 = 0; _i2 < REMOVE_ATTRIBUTE.length; _i2 += 2) {
+      _loop(_i2);
     }
   }
 
   // First do all DOM tree operations, and then do attribute and node value.
-  for (var _i2 = 0; _i2 < TREE_OPS.length; _i2++) {
-    var _TREE_OPS$_i = TREE_OPS[_i2],
+  for (var _i3 = 0; _i3 < TREE_OPS.length; _i3++) {
+    var _TREE_OPS$_i = TREE_OPS[_i3],
         INSERT_BEFORE = _TREE_OPS$_i.INSERT_BEFORE,
         REMOVE_CHILD = _TREE_OPS$_i.REMOVE_CHILD,
         REPLACE_CHILD = _TREE_OPS$_i.REPLACE_CHILD;
@@ -2545,39 +2917,28 @@ function patchNode$$1(patches, state) {
     // Insert/append elements.
 
     if (INSERT_BEFORE && INSERT_BEFORE.length) {
-      for (var _i3 = 0; _i3 < INSERT_BEFORE.length; _i3++) {
-        var _INSERT_BEFORE$_i = _slicedToArray(INSERT_BEFORE[_i3], 3),
-            _vTree2 = _INSERT_BEFORE$_i[0],
-            childNodes = _INSERT_BEFORE$_i[1],
-            referenceNode = _INSERT_BEFORE$_i[2];
-
-        var _domNode3 = NodeCache.get(_vTree2);
-        var refNode = referenceNode ? makeNode(referenceNode) : null;
-        var fragment = null;
-
+      for (var _i4 = 0; _i4 < INSERT_BEFORE.length; _i4 += 3) {
+        var _vTree = INSERT_BEFORE[_i4];
+        var newTree = INSERT_BEFORE[_i4 + 1];
+        var referenceTree = INSERT_BEFORE[_i4 + 2];
+        var _domNode = NodeCache.get(_vTree);
+        var referenceNode = referenceTree && createNode(referenceTree);
         var attached = TransitionCache.get('attached');
 
-        if (referenceNode) {
-          protectVTree(referenceNode);
+        if (referenceTree) {
+          protectVTree(referenceTree);
         }
 
-        if (childNodes.length) {
-          fragment = document.createDocumentFragment();
+        var newNode = createNode(newTree);
+        protectVTree(newTree);
 
-          for (var _i4 = 0; _i4 < childNodes.length; _i4++) {
-            var newNode = makeNode(childNodes[_i4]);
-            fragment.appendChild(newNode);
-            protectVTree(childNodes[_i4]);
-          }
-        } else {
-          fragment = makeNode(childNodes);
-          protectVTree(childNodes);
-        }
+        // If refNode is `null` then it will simply append like `appendChild`.
+        _domNode.insertBefore(newNode, referenceNode);
 
-        _domNode3.insertBefore(fragment, refNode);
+        var attachedPromises = runTransitions('attached', newNode);
 
-        if (attached.size) {
-          promises.push.apply(promises, _toConsumableArray$1(runTransitions(attached, fragment)));
+        if (attachedPromises.length) {
+          promises.push.apply(promises, _toConsumableArray$2(attachedPromises));
         }
       }
     }
@@ -2585,25 +2946,21 @@ function patchNode$$1(patches, state) {
     // Remove elements.
     if (REMOVE_CHILD && REMOVE_CHILD.length) {
       var _loop2 = function _loop2(_i5) {
-        var childNode = REMOVE_CHILD[_i5];
-        var domNode = NodeCache.get(childNode);
-
+        var vTree = REMOVE_CHILD[_i5];
+        var domNode = NodeCache.get(vTree);
         var detached = TransitionCache.get('detached');
+        var detachedPromises = runTransitions('detached', domNode);
 
-        if (detached.size) {
-          var newPromises = runTransitions(detached, domNode);
-
-          Promise.all(newPromises).then(function () {
+        if (detachedPromises.length) {
+          Promise.all(detachedPromises).then(function () {
             domNode.parentNode.removeChild(domNode);
-            unprotectVTree(childNode);
+            unprotectVTree(vTree);
           });
 
-          if (newPromises.length) {
-            promises.push.apply(promises, _toConsumableArray$1(newPromises));
-          }
+          promises.push.apply(promises, _toConsumableArray$2(detachedPromises));
         } else {
           domNode.parentNode.removeChild(domNode);
-          unprotectVTree(childNode);
+          unprotectVTree(vTree);
         }
       };
 
@@ -2615,49 +2972,109 @@ function patchNode$$1(patches, state) {
     // Replace elements.
     if (REPLACE_CHILD && REPLACE_CHILD.length) {
       var _loop3 = function _loop3(_i6) {
-        var _REPLACE_CHILD$_i = _slicedToArray(REPLACE_CHILD[_i6], 2),
-            newChildNode = _REPLACE_CHILD$_i[0],
-            oldChildNode = _REPLACE_CHILD$_i[1];
-
-        var oldDomNode = NodeCache.get(oldChildNode);
-        var newDomNode = makeNode(newChildNode);
-
+        var newTree = REPLACE_CHILD[_i6];
+        var oldTree = REPLACE_CHILD[_i6 + 1];
+        var oldDomNode = NodeCache.get(oldTree);
+        var newDomNode = createNode(newTree);
         var attached = TransitionCache.get('attached');
         var detached = TransitionCache.get('detached');
         var replaced = TransitionCache.get('replaced');
 
-        if (replaced.size) {
-          var attachedPromises = runTransitions(attached, newDomNode);
-          var detachedPromises = runTransitions(detached, oldDomNode);
+        // Always insert before to allow the element to transition.
+        oldDomNode.parentNode.insertBefore(newDomNode, oldDomNode);
+        protectVTree(newTree);
 
-          var replacedPromises = runTransitions(replaced, oldDomNode, newDomNode);
+        var attachedPromises = runTransitions('attached', newDomNode);
+        var detachedPromises = runTransitions('detached', oldDomNode);
+        var replacedPromises = runTransitions('replaced', oldDomNode, newDomNode);
+        var allPromises = [].concat(_toConsumableArray$2(attachedPromises), _toConsumableArray$2(detachedPromises), _toConsumableArray$2(replacedPromises));
 
-          var newPromises = [].concat(_toConsumableArray$1(attachedPromises), _toConsumableArray$1(detachedPromises), _toConsumableArray$1(replacedPromises));
-
-          Promise.all(newPromises).then(function () {
+        if (allPromises.length) {
+          promises.push(Promise.all(allPromises).then(function () {
             oldDomNode.parentNode.replaceChild(newDomNode, oldDomNode);
-            protectVTree(newChildNode);
-            unprotectVTree(oldChildNode);
-          });
-
-          if (newPromises.length) {
-            promises.push.apply(promises, _toConsumableArray$1(newPromises));
-          }
+            unprotectVTree(oldTree);
+          }));
         } else {
           oldDomNode.parentNode.replaceChild(newDomNode, oldDomNode);
-          protectVTree(newChildNode);
-          unprotectVTree(oldChildNode);
+          unprotectVTree(oldTree);
         }
       };
 
-      for (var _i6 = 0; _i6 < REPLACE_CHILD.length; _i6++) {
+      for (var _i6 = 0; _i6 < REPLACE_CHILD.length; _i6 += 2) {
         _loop3(_i6);
+      }
+    }
+  }
+
+  // Change all nodeValues.
+  if (NODE_VALUE.length) {
+    for (var _i7 = 0; _i7 < NODE_VALUE.length; _i7 += 3) {
+      var _vTree2 = NODE_VALUE[_i7];
+      var nodeValue = NODE_VALUE[_i7 + 1];
+      var _oldValue = NODE_VALUE[_i7 + 2];
+      var _domNode2 = NodeCache.get(_vTree2);
+      var textChanged = TransitionCache.get('textChanged');
+      var textChangedPromises = runTransitions('textChanged', _domNode2, _oldValue, nodeValue);
+
+      var parentNode = _domNode2.parentNode;
+
+
+      if (nodeValue.includes('&')) {
+        _domNode2.nodeValue = decodeEntities(nodeValue);
+      } else {
+        _domNode2.nodeValue = nodeValue;
+      }
+
+      if (parentNode && blockText$1.has(parentNode.nodeName.toLowerCase())) {
+        parentNode.nodeValue = escape(decodeEntities(nodeValue));
+      }
+
+      if (textChangedPromises.length) {
+        promises.push.apply(promises, _toConsumableArray$2(textChangedPromises));
       }
     }
   }
 
   return promises;
 }
+
+function syncTrees(transaction) {
+  var _transaction$state = transaction.state,
+      measure = _transaction$state.measure,
+      oldTree = _transaction$state.oldTree,
+      newTree = transaction.newTree,
+      domNode = transaction.domNode;
+
+
+  measure('sync trees');
+
+  // Do a global replace of the element, unable to do this at a lower level.
+  // Ignore this for document fragments, they don't appear in the DOM and we
+  // treat them as transparent containers.
+  if (oldTree.nodeName !== newTree.nodeName && newTree.nodeType !== 11) {
+    transaction.patches = {
+      TREE_OPS: [{ REPLACE_CHILD: [newTree, oldTree] }],
+      SET_ATTRIBUTE: [],
+      REMOVE_ATTRIBUTE: [],
+      NODE_VALUE: []
+    };
+
+    unprotectVTree(transaction.oldTree);
+    transaction.oldTree = transaction.state.oldTree = newTree;
+    protectVTree(transaction.oldTree);
+
+    // Update the StateCache since we are changing the top level element.
+    StateCache.set(createNode(newTree), transaction.state);
+  }
+  // Otherwise only diff the children.
+  else {
+      transaction.patches = syncTree(oldTree, newTree);
+    }
+
+  measure('sync trees');
+}
+
+function _toConsumableArray$4(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 /**
  * Processes a set of patches onto a tracked DOM Node.
@@ -2670,11 +3087,15 @@ function patch(transaction) {
       state = transaction.state,
       measure = transaction.state.measure,
       patches = transaction.patches;
+  var _transaction$promises = transaction.promises,
+      promises = _transaction$promises === undefined ? [] : _transaction$promises;
 
 
   measure('patch node');
-  transaction.promises = patchNode$$1(patches, state).filter(Boolean);
+  promises.push.apply(promises, _toConsumableArray$4(patchNode$$1(patches, state)));
   measure('patch node');
+
+  transaction.promises = promises;
 }
 
 // End flow, this terminates the transaction and returns a Promise that
@@ -2699,6 +3120,19 @@ function endAsPromise(transaction) {
   }
 }
 
+
+
+var tasks = Object.freeze({
+	schedule: schedule,
+	shouldUpdate: shouldUpdate,
+	reconcileTrees: reconcileTrees,
+	syncTrees: syncTrees,
+	patchNode: patch,
+	endAsPromise: endAsPromise
+});
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -2718,13 +3152,33 @@ var Transaction = function () {
       }
 
       // Create the next transaction.
-      var _state$nextTransactio = state.nextTransaction,
-          domNode = _state$nextTransactio.domNode,
-          markup = _state$nextTransactio.markup,
-          options = _state$nextTransactio.options;
+      var nextTransaction = state.nextTransaction,
+          promises = state.nextTransaction.promises;
 
       state.nextTransaction = undefined;
-      Transaction.create(domNode, markup, options).start();
+
+      // Pull out the resolver deferred.
+      var resolver = promises && promises[0];
+
+      // Remove the aborted status.
+      nextTransaction.aborted = false;
+
+      // Remove the last task, this has already been executed (via abort).
+      nextTransaction.tasks.pop();
+
+      // Reflow this transaction, sans the terminator, since we have already
+      // executed it.
+      Transaction.flow(nextTransaction, nextTransaction.tasks);
+
+      // Wait for the promises to complete if they exist, otherwise resolve
+      // immediately.
+      if (promises && promises.length > 1) {
+        Promise.all(promises.slice(1)).then(function () {
+          return resolver.resolve();
+        });
+      } else if (resolver) {
+        resolver.resolve();
+      }
     }
   }, {
     key: 'flow',
@@ -2755,6 +3209,9 @@ var Transaction = function () {
   }, {
     key: 'assert',
     value: function assert(transaction) {
+      if (_typeof(transaction.domNode) !== 'object') {
+        throw new Error('Transaction requires a DOM Node mount point');
+      }
       if (transaction.aborted && transaction.completed) {
         throw new Error('Transaction was previously aborted');
       } else if (transaction.completed) {
@@ -2788,7 +3245,7 @@ var Transaction = function () {
     this.options = options;
 
     this.state = StateCache.get(domNode) || {
-      measure: measure(domNode, markup),
+      measure: makeMeasure(domNode, markup),
       internals: internals
     };
 
@@ -2803,8 +3260,10 @@ var Transaction = function () {
   _createClass(Transaction, [{
     key: 'start',
     value: function start() {
+      Transaction.assert(this);
+
       var domNode = this.domNode,
-          measure$$1 = this.state.measure,
+          measure = this.state.measure,
           tasks = this.tasks;
 
       var takeLastTask = tasks.pop();
@@ -2815,7 +3274,7 @@ var Transaction = function () {
       Transaction.invokeMiddleware(this);
 
       // Measure the render flow if the user wants to track performance.
-      measure$$1('render');
+      measure('render');
 
       // Push back the last task as part of ending the flow.
       tasks.push(takeLastTask);
@@ -2849,9 +3308,11 @@ var Transaction = function () {
       var state = this.state,
           domNode = this.domNode,
           options = this.options;
-      var measure$$1 = state.measure;
+      var measure = state.measure;
       var inner = options.inner;
 
+
+      measure('finalize');
 
       this.completed = true;
 
@@ -2869,8 +3330,8 @@ var Transaction = function () {
       }
 
       // Mark the end to rendering.
-      measure$$1('finalize');
-      measure$$1('render');
+      measure('finalize');
+      measure('render');
 
       // Cache the markup and text for the DOM node to allow for short-circuiting
       // future render transactions.
@@ -2903,12 +3364,11 @@ var Transaction = function () {
   return Transaction;
 }();
 
-var _typeof$4 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+var _typeof$6 = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 var isAttributeEx = /(=|"|')[^><]*?$/;
 var isTagEx = /(<|\/)/;
-var TOKEN$1 = '__DIFFHTML__';
-
+var TOKEN = '__DIFFHTML__';
 /**
  * Get the next value from the list. If the next value is a string, make sure
  * it is escaped.
@@ -2918,7 +3378,7 @@ var TOKEN$1 = '__DIFFHTML__';
  */
 var nextValue = function nextValue(values) {
   var value = values.shift();
-  return typeof value === 'string' ? escape(value) : value;
+  return typeof value === 'string' ? escape(decodeEntities(value)) : value;
 };
 
 function handleTaggedTemplate(options, strings) {
@@ -2932,14 +3392,14 @@ function handleTaggedTemplate(options, strings) {
   }
 
   // Do not attempt to parse empty strings.
-  if (!strings[0].length && !values.length) {
+  if (!strings) {
     return null;
   }
 
   // Parse only the text, no dynamic bits.
   if (strings.length === 1 && !values.length) {
     var _childNodes = parse(strings[0]).childNodes;
-    return _childNodes.length > 1 ? _childNodes : _childNodes[0];
+    return _childNodes.length > 1 ? createTree(_childNodes) : _childNodes[0];
   }
 
   // Used to store markup and tokens.
@@ -2948,9 +3408,9 @@ function handleTaggedTemplate(options, strings) {
   // We filter the supplemental values by where they are used. Values are
   // either, children, or tags (for components).
   var supplemental = {
-    attributes: [],
-    children: [],
-    tags: []
+    attributes: {},
+    children: {},
+    tags: {}
   };
 
   // Loop over the static strings, each break correlates to an interpolated
@@ -2972,28 +3432,29 @@ function handleTaggedTemplate(options, strings) {
       var isAttribute = Boolean(retVal.match(isAttributeEx));
       var isTag = Boolean(lastCharacter.match(isTagEx));
       var isString = typeof value === 'string';
-      var isObject = (typeof value === 'undefined' ? 'undefined' : _typeof$4(value)) === 'object';
+      var isObject = (typeof value === 'undefined' ? 'undefined' : _typeof$6(value)) === 'object';
       var isArray = Array.isArray(value);
+      var token = TOKEN + i + '__';
 
       // Injected as attribute.
       if (isAttribute) {
-        supplemental.attributes.push(value);
-        retVal += TOKEN$1;
+        supplemental.attributes[i] = value;
+        retVal += token;
       }
-      // Injected as component tag.
+      // Injected as a tag.
       else if (isTag && !isString) {
-          supplemental.tags.push(value);
-          retVal += TOKEN$1;
+          supplemental.tags[i] = value;
+          retVal += token;
         }
         // Injected as a child node.
         else if (isArray || isObject) {
-            supplemental.children.push(createTree(value));
-            retVal += TOKEN$1;
+            supplemental.children[i] = createTree(value);
+            retVal += token;
           }
           // Injected as something else in the markup or undefined, ignore
           // obviously falsy values used with boolean operators.
-          else if (value !== null && value !== undefined && value !== false) {
-              retVal += isString ? decodeEntities(value) : value;
+          else if (value) {
+              retVal += value;
             }
     }
   });
@@ -3003,26 +3464,16 @@ function handleTaggedTemplate(options, strings) {
 
   // This makes it easier to work with a single element as a root, opposed to
   // always returning an array.
-  return childNodes.length === 1 ? childNodes[0] : childNodes;
+  return childNodes.length === 1 ? childNodes[0] : createTree(childNodes);
 }
 
-// Loose mode (default)
-var html = function html() {
+var html = (function () {
   for (var _len2 = arguments.length, args = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
     args[_key2] = arguments[_key2];
   }
 
   return handleTaggedTemplate.apply(undefined, [{}].concat(args));
-};
-
-// Strict mode (optional enforcing closing tags)
-html.strict = function () {
-  for (var _len3 = arguments.length, args = Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
-    args[_key3] = arguments[_key3];
-  }
-
-  return handleTaggedTemplate.apply(undefined, [{ strict: true }].concat(args));
-};
+});
 
 function release(domNode) {
   // Try and find a state object for this DOM Node.
@@ -3225,6 +3676,13 @@ function innerHTML(element) {
   return Transaction.create(element, markup, options).start();
 }
 
+function element(element) {
+  var markup = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : '';
+  var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+
+  return Transaction.create(element, markup, options).start();
+}
+
 // Public API. Passed to subscribed middleware.
 var diff = {
   VERSION: '1.0.0-beta',
@@ -3236,20 +3694,25 @@ var diff = {
   outerHTML: outerHTML,
   innerHTML: innerHTML,
   html: html,
-  internals: internals
+  internals: internals,
+  tasks: tasks
 };
 
 // Ensure the `diff` property is nonenumerable so it doesn't show up in logs.
-Object.defineProperty(use, 'diff', { value: diff, enumerable: false });
+if (!use.diff) {
+  Object.defineProperty(use, 'diff', { value: diff, enumerable: false });
+}
 
 exports.__VERSION__ = VERSION;
 exports.addTransitionState = addTransitionState;
 exports.removeTransitionState = removeTransitionState;
 exports.release = release;
 exports.createTree = createTree;
+exports.createElement = createTree;
 exports.use = use;
 exports.outerHTML = outerHTML;
 exports.innerHTML = innerHTML;
+exports.element = element;
 exports.html = html;
 exports['default'] = diff;
 
@@ -3258,7 +3721,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 })));
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":18}],5:[function(require,module,exports){
+},{"_process":27}],7:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3267,11 +3730,15 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _templateObject = _taggedTemplateLiteral(['\n      <section class="todoapp"\n        attached=', '\n        detached=', '\n        onsubmit=', '\n        onclick=', '\n        onkeydown=', '\n        ondblclick=', '\n        onchange=', '>\n\n        <header class="header">\n          <h1>todos</h1>\n\n          <form class="add-todo">\n            <input\n              class="new-todo"\n              placeholder="What needs to be done?"\n              autofocus="">\n          </form>\n        </header>\n\n        ', '\n      </section>\n\n      ', '\n    '], ['\n      <section class="todoapp"\n        attached=', '\n        detached=', '\n        onsubmit=', '\n        onclick=', '\n        onkeydown=', '\n        ondblclick=', '\n        onchange=', '>\n\n        <header class="header">\n          <h1>todos</h1>\n\n          <form class="add-todo">\n            <input\n              class="new-todo"\n              placeholder="What needs to be done?"\n              autofocus="">\n          </form>\n        </header>\n\n        ', '\n      </section>\n\n      ', '\n    ']),
+var _templateObject = _taggedTemplateLiteral(['\n      <section class="todoapp"\n        onattached=', '\n        ondetached=', '\n        onsubmit=', '\n        onclick=', '\n        onkeydown=', '\n        ondblclick=', '\n        onchange=', '>\n\n        <header class="header">\n          <h1>todos</h1>\n\n          <form class="add-todo">\n            <input\n              class="new-todo"\n              placeholder="What needs to be done?"\n              autofocus="">\n          </form>\n        </header>\n\n        ', '\n      </section>\n\n      ', '\n    '], ['\n      <section class="todoapp"\n        onattached=', '\n        ondetached=', '\n        onsubmit=', '\n        onclick=', '\n        onkeydown=', '\n        ondblclick=', '\n        onchange=', '>\n\n        <header class="header">\n          <h1>todos</h1>\n\n          <form class="add-todo">\n            <input\n              class="new-todo"\n              placeholder="What needs to be done?"\n              autofocus="">\n          </form>\n        </header>\n\n        ', '\n      </section>\n\n      ', '\n    ']),
     _templateObject2 = _taggedTemplateLiteral(['\n          <section class="main">\n            <input class="toggle-all" type="checkbox" ', '>\n\n            <ul class="todo-list">', '</ul>\n          </section>\n\n          <footer class="footer">\n            <span class="todo-count">\n              <strong>', '</strong>\n              ', ' left\n            </span>\n\n            <ul class="filters">\n              <li>\n                <a href="#/" class=', '>All</a>\n              </li>\n              <li>\n                <a href="#/active" class=', '>Active</a>\n              </li>\n              <li>\n                <a href="#/completed" class=', '>Completed</a>\n              </li>\n            </ul>\n\n            ', '\n          </footer>\n        '], ['\n          <section class="main">\n            <input class="toggle-all" type="checkbox" ', '>\n\n            <ul class="todo-list">', '</ul>\n          </section>\n\n          <footer class="footer">\n            <span class="todo-count">\n              <strong>', '</strong>\n              ', ' left\n            </span>\n\n            <ul class="filters">\n              <li>\n                <a href="#/" class=', '>All</a>\n              </li>\n              <li>\n                <a href="#/active" class=', '>Active</a>\n              </li>\n              <li>\n                <a href="#/completed" class=', '>Completed</a>\n              </li>\n            </ul>\n\n            ', '\n          </footer>\n        ']),
     _templateObject3 = _taggedTemplateLiteral(['\n              <button class="clear-completed" onclick=', '>Clear completed</button>\n            '], ['\n              <button class="clear-completed" onclick=', '>Clear completed</button>\n            ']);
 
 var _diffhtml = require('diffhtml');
+
+var _lodash = require('lodash.debounce');
+
+var _lodash2 = _interopRequireDefault(_lodash);
 
 var _store = require('../redux/store');
 
@@ -3294,26 +3761,7 @@ function _taggedTemplateLiteral(strings, raw) { return Object.freeze(Object.defi
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var TodoApp = function () {
-  _createClass(TodoApp, [{
-    key: 'render',
-    value: function render() {
-      var state = _store2.default.getState();
-      var todoApp = state[this.mount.dataset.reducer];
-      var status = state.url.path.slice(1);
-      var allTodos = todoApp.todos;
-      var todos = todoApp.getByStatus(status);
-      var activeTodos = todoApp.getByStatus('active');
-      var completedTodos = todoApp.getByStatus('completed');
-
-      localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
-
-      (0, _diffhtml.innerHTML)(this.mount, (0, _diffhtml.html)(_templateObject, this.animateAttached, this.animateDetached, this.onSubmitHandler, this.onClickHandler, this.handleKeyDown, this.startEditing, this.toggleCompletion, allTodos.length ? (0, _diffhtml.html)(_templateObject2, this.setCheckedState(), (0, _todoList2.default)({
-        stopEditing: this.stopEditing,
-        getTodoClassNames: this.getTodoClassNames,
-        todos: todos
-      }), activeTodos.length, activeTodos.length == 1 ? 'item' : 'items', this.getNavClass('/'), this.getNavClass('/active'), this.getNavClass('/completed'), completedTodos.length ? (0, _diffhtml.html)(_templateObject3, this.clearCompleted) : '') : '', this.existingFooter));
-    }
-  }], [{
+  _createClass(TodoApp, null, [{
     key: 'create',
     value: function create(mount) {
       return new TodoApp(mount);
@@ -3325,14 +3773,28 @@ var TodoApp = function () {
 
     _classCallCheck(this, TodoApp);
 
-    this.addTodo = function (ev) {
-      if (!ev.target.matches('.add-todo')) {
-        return;
-      }
+    this.render = (0, _lodash2.default)(function () {
+      var state = _store2.default.getState();
+      var todoApp = state[_this.mount.dataset.reducer];
+      var status = state.url.path.slice(1);
+      var allTodos = todoApp.todos;
+      var todos = todoApp.getByStatus(status);
+      var activeTodos = todoApp.getByStatus('active');
+      var completedTodos = todoApp.getByStatus('completed');
 
+      localStorage['diffhtml-todos'] = JSON.stringify(allTodos);
+
+      (0, _diffhtml.innerHTML)(_this.mount, (0, _diffhtml.html)(_templateObject, _this.animateAttached, _this.animateDetached, _this.onSubmitHandler, _this.onClickHandler, _this.handleKeyDown, _this.startEditing, _this.toggleCompletion, allTodos.length && (0, _diffhtml.html)(_templateObject2, _this.setCheckedState(), (0, _todoList2.default)({
+        stopEditing: _this.stopEditing,
+        getTodoClassNames: _this.getTodoClassNames,
+        todos: todos
+      }), String(activeTodos.length), activeTodos.length == 1 ? 'item' : 'items', _this.getNavClass('/'), _this.getNavClass('/active'), _this.getNavClass('/completed'), completedTodos.length && (0, _diffhtml.html)(_templateObject3, _this.clearCompleted)), _this.existingFooter));
+    }, 10, { leading: true });
+
+    this.addTodo = function (ev) {
       ev.preventDefault();
 
-      var newTodo = ev.target.querySelector('.new-todo');
+      var newTodo = ev.target.parentNode.querySelector('.new-todo');
       _store2.default.dispatch(todoAppActions.addTodo(newTodo.value));
       newTodo.value = '';
     };
@@ -3343,9 +3805,8 @@ var TodoApp = function () {
       }
 
       var li = ev.target.parentNode.parentNode;
-      var index = Array.from(li.parentNode.children).indexOf(li);
 
-      _store2.default.dispatch(todoAppActions.removeTodo(index));
+      _store2.default.dispatch(todoAppActions.removeTodo(li.key));
     };
 
     this.toggleCompletion = function (ev) {
@@ -3354,9 +3815,8 @@ var TodoApp = function () {
       }
 
       var li = ev.target.parentNode.parentNode;
-      var index = Array.from(li.parentNode.children).indexOf(li);
 
-      _store2.default.dispatch(todoAppActions.toggleCompletion(index, ev.target.checked));
+      _store2.default.dispatch(todoAppActions.toggleCompletion(li.key, ev.target.checked));
     };
 
     this.startEditing = function (ev) {
@@ -3365,9 +3825,8 @@ var TodoApp = function () {
       }
 
       var li = ev.target.parentNode.parentNode;
-      var index = Array.from(li.parentNode.children).indexOf(li);
 
-      _store2.default.dispatch(todoAppActions.startEditing(index));
+      _store2.default.dispatch(todoAppActions.startEditing(li.key));
 
       li.querySelector('form input').focus();
     };
@@ -3378,14 +3837,13 @@ var TodoApp = function () {
       var parentNode = ev.target.parentNode;
       var nodeName = parentNode.nodeName.toLowerCase();
       var li = nodeName === 'li' ? parentNode : parentNode.parentNode;
-      var index = Array.from(li.parentNode.children).indexOf(li);
       var editTodo = li.querySelector('.edit');
       var text = editTodo.value.trim();
 
       if (text) {
-        _store2.default.dispatch(todoAppActions.stopEditing(index, text));
+        _store2.default.dispatch(todoAppActions.stopEditing(key, text));
       } else {
-        _store2.default.dispatch(todoAppActions.removeTodo(index));
+        _store2.default.dispatch(todoAppActions.removeTodo(key));
       }
     };
 
@@ -3406,20 +3864,29 @@ var TodoApp = function () {
     };
 
     this.handleKeyDown = function (ev) {
-      if (!ev.target.matches('.edit')) {
+      if (!ev.target.matches('.edit, .new-todo')) {
         return;
       }
-
-      var todoApp = _store2.default.getState()[_this.mount.dataset.reducer];
-
-      var li = ev.target.parentNode.parentNode;
-      var index = Array.from(li.parentNode.children).indexOf(li);
 
       switch (ev.keyCode) {
         case 27:
           {
-            ev.target.value = todoApp.todos[index].title;
+            var todoApp = _store2.default.getState()[_this.mount.dataset.reducer];
+            var li = ev.target.parentNode.parentNode;
+            var index = Array.from(li.parentNode.children).indexOf(li);
+
+            ev.target.value = todoApp.todos.find(function (todo) {
+              return todo.key === key;
+            }).title;
+
             _this.stopEditing(ev);
+            break;
+          }
+
+        case 13:
+          {
+            _this.addTodo(ev);
+            break;
           }
       }
     };
@@ -3466,9 +3933,7 @@ var TodoApp = function () {
 
     this.mount = mount;
     this.existingFooter = this.mount.querySelector('footer');
-    this.unsubscribeStore = _store2.default.subscribe(function () {
-      return _this.render();
-    });
+    this.unsubscribeStore = _store2.default.subscribe(this.render);
     this.render();
   }
 
@@ -3480,7 +3945,7 @@ var TodoApp = function () {
       }
 
       if (element.matches('footer.info')) {
-        new Promise(function (resolve) {
+        return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
         }).then(function () {
           element.style.opacity = 1;
@@ -3489,14 +3954,14 @@ var TodoApp = function () {
 
       // Animate Todo item being added.
       if (element.matches('.todo-list li, footer.info')) {
-        new Promise(function (resolve) {
+        return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'scale(.5)' }, { opacity: 1, transform: 'scale(1)' }], { duration: 250 }).onfinish = resolve;
         });
       }
 
       // Animate the entire app loading.
       if (element.matches('.todoapp')) {
-        new Promise(function (resolve) {
+        return new Promise(function (resolve) {
           return element.animate([{ opacity: 0, transform: 'translateY(100%)', easing: 'ease-out' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 375 }).onfinish = resolve;
         });
       }
@@ -3522,14 +3987,14 @@ var TodoApp = function () {
 
 exports.default = TodoApp;
 
-},{"../redux/actions/todo-app":8,"../redux/store":12,"./todo-list":6,"diffhtml":4}],6:[function(require,module,exports){
+},{"../redux/actions/todo-app":10,"../redux/store":14,"./todo-list":8,"diffhtml":6,"lodash.debounce":16}],8:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 
-var _templateObject = _taggedTemplateLiteral(['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input onblur=', ' value="', '" class="edit">\n\t\t\t</form>\n\t\t</li>\n\t'], ['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input onblur=', ' value="', '" class="edit">\n\t\t\t</form>\n\t\t</li>\n\t']);
+var _templateObject = _taggedTemplateLiteral(['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input onclick=', ' class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input onblur=', ' value="', '" class="edit" />\n\t\t\t</form>\n\t\t</li>\n\t'], ['\n\t\t<li key="', '" class="', '">\n\t\t\t<div class="view">\n\t\t\t\t<input onclick=', ' class="toggle" type="checkbox" ', '>\n\t\t\t\t<label>', '</label>\n\t\t\t\t<button class="destroy"></button>\n\t\t\t</div>\n\n\t\t\t<form class="edit-todo">\n\t\t\t\t<input onblur=', ' value="', '" class="edit" />\n\t\t\t</form>\n\t\t</li>\n\t']);
 
 exports.default = renderTodoList;
 
@@ -3537,13 +4002,17 @@ var _diffhtml = require('diffhtml');
 
 function _taggedTemplateLiteral(strings, raw) { return Object.freeze(Object.defineProperties(strings, { raw: { value: Object.freeze(raw) } })); }
 
+var stopPropagation = function stopPropagation(ev) {
+	return ev.stopPropagation();
+};
+
 function renderTodoList(props) {
 	return props.todos.map(function (todo) {
-		return (0, _diffhtml.html)(_templateObject, todo.key, props.getTodoClassNames(todo), todo.completed ? 'checked' : '', todo.title, props.stopEditing, todo.title);
+		return (0, _diffhtml.html)(_templateObject, todo.key, props.getTodoClassNames(todo), stopPropagation, todo.completed && 'checked', todo.title, props.stopEditing, todo.title);
 	});
 }
 
-},{"diffhtml":4}],7:[function(require,module,exports){
+},{"diffhtml":6}],9:[function(require,module,exports){
 'use strict';
 
 var _diffhtml = require('diffhtml');
@@ -3552,13 +4021,21 @@ var _diffhtmlDevtools = require('diffhtml-devtools');
 
 var _diffhtmlDevtools2 = _interopRequireDefault(_diffhtmlDevtools);
 
-var _diffhtmlLogger = require('diffhtml-logger');
+var _diffhtmlMiddlewareLogger = require('diffhtml-middleware-logger');
 
-var _diffhtmlLogger2 = _interopRequireDefault(_diffhtmlLogger);
+var _diffhtmlMiddlewareLogger2 = _interopRequireDefault(_diffhtmlMiddlewareLogger);
 
 var _diffhtmlInlineTransitions = require('diffhtml-inline-transitions');
 
 var _diffhtmlInlineTransitions2 = _interopRequireDefault(_diffhtmlInlineTransitions);
+
+var _diffhtmlSyntheticEvents = require('diffhtml-synthetic-events');
+
+var _diffhtmlSyntheticEvents2 = _interopRequireDefault(_diffhtmlSyntheticEvents);
+
+var _diffhtmlMiddlewareVerifyState = require('diffhtml-middleware-verify-state');
+
+var _diffhtmlMiddlewareVerifyState2 = _interopRequireDefault(_diffhtmlMiddlewareVerifyState);
 
 var _todoApp = require('./components/todo-app');
 
@@ -3577,8 +4054,10 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 (0, _diffhtml.use)((0, _diffhtmlDevtools2.default)());
-//use(logger());
-//use(inlineTransitions());
+(0, _diffhtml.use)((0, _diffhtmlMiddlewareLogger2.default)());
+(0, _diffhtml.use)((0, _diffhtmlMiddlewareVerifyState2.default)({ debug: true }));
+(0, _diffhtml.use)((0, _diffhtmlInlineTransitions2.default)());
+//use(syntheticEvents());
 
 var setHashState = function setHashState(hash) {
   return _store2.default.dispatch(urlActions.setHashState(hash));
@@ -3587,15 +4066,12 @@ var setHashState = function setHashState(hash) {
 // Create the application and mount.
 _todoApp2.default.create(document.querySelector('todo-app'));
 
-// Set URL state.
-setHashState(location.hash);
-
 // Set URL state when hash changes.
 window.onhashchange = function (e) {
   return setHashState(location.hash);
 };
 
-},{"./components/todo-app":5,"./redux/actions/url":9,"./redux/store":12,"diffhtml":4,"diffhtml-devtools":1,"diffhtml-inline-transitions":2,"diffhtml-logger":3}],8:[function(require,module,exports){
+},{"./components/todo-app":7,"./redux/actions/url":11,"./redux/store":14,"diffhtml":6,"diffhtml-devtools":1,"diffhtml-inline-transitions":2,"diffhtml-middleware-logger":4,"diffhtml-middleware-verify-state":5,"diffhtml-synthetic-events":3}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3623,32 +4099,32 @@ function addTodo(title) {
 	};
 }
 
-function removeTodo(index) {
+function removeTodo(key) {
 	return {
 		type: REMOVE_TODO,
-		index: index
+		key: key
 	};
 }
 
-function toggleCompletion(index, completed) {
+function toggleCompletion(key, completed) {
 	return {
 		type: TOGGLE_COMPLETION,
-		index: index,
+		key: key,
 		completed: completed
 	};
 }
 
-function startEditing(index) {
+function startEditing(key) {
 	return {
 		type: START_EDITING,
-		index: index
+		key: key
 	};
 }
 
-function stopEditing(index, title) {
+function stopEditing(key, title) {
 	return {
 		type: STOP_EDITING,
-		index: index,
+		key: key,
 		title: title
 	};
 }
@@ -3666,7 +4142,7 @@ function toggleAll(completed) {
 	};
 }
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3684,7 +4160,7 @@ function setHashState(hash) {
 	};
 }
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3698,8 +4174,21 @@ var todoAppActions = _interopRequireWildcard(_todoApp);
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
 var assign = Object.assign;
 
+// Generates good-enough-for-a-demo keys using uuidv4.
+
+var uuidv4 = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+var uuid = function uuid() {
+	return uuidv4.replace(/[xy]/g, function (c) {
+		var r = Math.random() * 16 | 0;
+		return (c == 'x' ? r : r & 0x3 | 0x8).toString(16);
+	});
+};
+
+// Persists todos to localStorage and
 var initialState = {
 	todos: JSON.parse(localStorage['diffhtml-todos'] || '[]'),
 
@@ -3718,7 +4207,7 @@ var initialState = {
 };
 
 function todoApp() {
-	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
+	var state = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : initialState;
 	var action = arguments[1];
 
 	switch (action.type) {
@@ -3734,57 +4223,66 @@ function todoApp() {
 						editing: false,
 
 						title: action.title.trim(),
-						key: state.todos.length
+						key: uuid()
 					})
 				});
 			}
 
 		case todoAppActions.REMOVE_TODO:
 			{
-				state.todos.splice(action.index, 1);
-
 				return assign({}, state, {
-					todos: [].concat(state.todos)
+					todos: state.todos.filter(function (todo) {
+						return todo.key !== action.key;
+					})
 				});
 			}
 
 		case todoAppActions.TOGGLE_COMPLETION:
 			{
-				var todo = state.todos[action.index];
+				var index = state.todos.findIndex(function (todo) {
+					return todo.key === action.key;
+				});
+				var todo = state.todos[index];
 
-				state.todos[action.index] = assign({}, todo, {
+				state.todos[index] = assign({}, todo, {
 					completed: action.completed
 				});
 
 				return assign({}, state, {
-					todos: [].concat(state.todos)
+					todos: [].concat(_toConsumableArray(state.todos))
 				});
 			}
 
 		case todoAppActions.START_EDITING:
 			{
-				var _todo = state.todos[action.index];
+				var _index = state.todos.findIndex(function (todo) {
+					return todo.key === action.key;
+				});
+				var _todo = state.todos[_index];
 
-				state.todos[action.index] = assign({}, _todo, {
+				state.todos[_index] = assign({}, _todo, {
 					editing: true
 				});
 
 				return assign({}, state, {
-					todos: [].concat(state.todos)
+					todos: [].concat(_toConsumableArray(state.todos))
 				});
 			}
 
 		case todoAppActions.STOP_EDITING:
 			{
-				var _todo2 = state.todos[action.index];
+				var _index2 = state.todos.findIndex(function (todo) {
+					return todo.key === action.key;
+				});
+				var _todo2 = state.todos[_index2];
 
-				state.todos[action.index] = assign({}, _todo2, {
+				state.todos[_index2] = assign({}, _todo2, {
 					title: action.title,
 					editing: false
 				});
 
 				return assign({}, state, {
-					todos: [].concat(state.todos)
+					todos: [].concat(_toConsumableArray(state.todos))
 				});
 			}
 
@@ -3815,7 +4313,7 @@ function todoApp() {
 	}
 }
 
-},{"../actions/todo-app":8}],11:[function(require,module,exports){
+},{"../actions/todo-app":10}],13:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3834,7 +4332,7 @@ var assign = Object.assign;
 var initialState = { path: location.hash.slice(1) || '/' };
 
 function url() {
-	var state = arguments.length <= 0 || arguments[0] === undefined ? initialState : arguments[0];
+	var state = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : initialState;
 	var action = arguments[1];
 
 	switch (action.type) {
@@ -3850,7 +4348,7 @@ function url() {
 	}
 }
 
-},{"../actions/url":9}],12:[function(require,module,exports){
+},{"../actions/url":11}],14:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -3898,54 +4396,716 @@ exports.default = createStoreWithMiddleware((0, _redux.combineReducers)({
 	}
 }), {});
 
-},{"./reducers/todo-app":10,"./reducers/url":11,"redux":25,"redux-logger":19}],13:[function(require,module,exports){
-var overArg = require('./_overArg');
-
-/** Built-in value references. */
-var getPrototype = overArg(Object.getPrototypeOf, Object);
-
-module.exports = getPrototype;
-
-},{"./_overArg":15}],14:[function(require,module,exports){
-/**
- * Checks if `value` is a host object in IE < 9.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
+},{"./reducers/todo-app":12,"./reducers/url":13,"redux":38,"redux-logger":32}],15:[function(require,module,exports){
+(function (global){
+/*!
+ * deep-diff.
+ * Licensed under the MIT License.
  */
-function isHostObject(value) {
-  // Many host objects are `Object` objects that can coerce to strings
-  // despite having improperly defined `toString` methods.
-  var result = false;
-  if (value != null && typeof value.toString != 'function') {
-    try {
-      result = !!(value + '');
-    } catch (e) {}
+;(function(root, factory) {
+  'use strict';
+  if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+    define([], function() {
+      return factory();
+    });
+  } else if (typeof exports === 'object') {
+    // Node. Does not work with strict CommonJS, but
+    // only CommonJS-like environments that support module.exports,
+    // like Node.
+    module.exports = factory();
+  } else {
+    // Browser globals (root is window)
+    root.DeepDiff = factory();
   }
-  return result;
-}
+}(this, function(undefined) {
+  'use strict';
 
-module.exports = isHostObject;
+  var $scope, conflict, conflictResolution = [];
+  if (typeof global === 'object' && global) {
+    $scope = global;
+  } else if (typeof window !== 'undefined') {
+    $scope = window;
+  } else {
+    $scope = {};
+  }
+  conflict = $scope.DeepDiff;
+  if (conflict) {
+    conflictResolution.push(
+      function() {
+        if ('undefined' !== typeof conflict && $scope.DeepDiff === accumulateDiff) {
+          $scope.DeepDiff = conflict;
+          conflict = undefined;
+        }
+      });
+  }
 
-},{}],15:[function(require,module,exports){
-/**
- * Creates a unary function that invokes `func` with its argument transformed.
- *
- * @private
- * @param {Function} func The function to wrap.
- * @param {Function} transform The argument transform.
- * @returns {Function} Returns the new function.
- */
-function overArg(func, transform) {
-  return function(arg) {
-    return func(transform(arg));
-  };
-}
+  // nodejs compatible on server side and in the browser.
+  function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor;
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  }
 
-module.exports = overArg;
+  function Diff(kind, path) {
+    Object.defineProperty(this, 'kind', {
+      value: kind,
+      enumerable: true
+    });
+    if (path && path.length) {
+      Object.defineProperty(this, 'path', {
+        value: path,
+        enumerable: true
+      });
+    }
+  }
 
+  function DiffEdit(path, origin, value) {
+    DiffEdit.super_.call(this, 'E', path);
+    Object.defineProperty(this, 'lhs', {
+      value: origin,
+      enumerable: true
+    });
+    Object.defineProperty(this, 'rhs', {
+      value: value,
+      enumerable: true
+    });
+  }
+  inherits(DiffEdit, Diff);
+
+  function DiffNew(path, value) {
+    DiffNew.super_.call(this, 'N', path);
+    Object.defineProperty(this, 'rhs', {
+      value: value,
+      enumerable: true
+    });
+  }
+  inherits(DiffNew, Diff);
+
+  function DiffDeleted(path, value) {
+    DiffDeleted.super_.call(this, 'D', path);
+    Object.defineProperty(this, 'lhs', {
+      value: value,
+      enumerable: true
+    });
+  }
+  inherits(DiffDeleted, Diff);
+
+  function DiffArray(path, index, item) {
+    DiffArray.super_.call(this, 'A', path);
+    Object.defineProperty(this, 'index', {
+      value: index,
+      enumerable: true
+    });
+    Object.defineProperty(this, 'item', {
+      value: item,
+      enumerable: true
+    });
+  }
+  inherits(DiffArray, Diff);
+
+  function arrayRemove(arr, from, to) {
+    var rest = arr.slice((to || from) + 1 || arr.length);
+    arr.length = from < 0 ? arr.length + from : from;
+    arr.push.apply(arr, rest);
+    return arr;
+  }
+
+  function realTypeOf(subject) {
+    var type = typeof subject;
+    if (type !== 'object') {
+      return type;
+    }
+
+    if (subject === Math) {
+      return 'math';
+    } else if (subject === null) {
+      return 'null';
+    } else if (Array.isArray(subject)) {
+      return 'array';
+    } else if (Object.prototype.toString.call(subject) === '[object Date]') {
+      return 'date';
+    } else if (typeof subject.toString !== 'undefined' && /^\/.*\//.test(subject.toString())) {
+      return 'regexp';
+    }
+    return 'object';
+  }
+
+  function deepDiff(lhs, rhs, changes, prefilter, path, key, stack) {
+    path = path || [];
+    var currentPath = path.slice(0);
+    if (typeof key !== 'undefined') {
+      if (prefilter) {
+        if (typeof(prefilter) === 'function' && prefilter(currentPath, key)) { return; }
+        else if (typeof(prefilter) === 'object') {
+          if (prefilter.prefilter && prefilter.prefilter(currentPath, key)) { return; }
+          if (prefilter.normalize) {
+            var alt = prefilter.normalize(currentPath, key, lhs, rhs);
+            if (alt) {
+              lhs = alt[0];
+              rhs = alt[1];
+            }
+          }
+        }
+      }
+      currentPath.push(key);
+    }
+
+    // Use string comparison for regexes
+    if (realTypeOf(lhs) === 'regexp' && realTypeOf(rhs) === 'regexp') {
+      lhs = lhs.toString();
+      rhs = rhs.toString();
+    }
+
+    var ltype = typeof lhs;
+    var rtype = typeof rhs;
+    if (ltype === 'undefined') {
+      if (rtype !== 'undefined') {
+        changes(new DiffNew(currentPath, rhs));
+      }
+    } else if (rtype === 'undefined') {
+      changes(new DiffDeleted(currentPath, lhs));
+    } else if (realTypeOf(lhs) !== realTypeOf(rhs)) {
+      changes(new DiffEdit(currentPath, lhs, rhs));
+    } else if (Object.prototype.toString.call(lhs) === '[object Date]' && Object.prototype.toString.call(rhs) === '[object Date]' && ((lhs - rhs) !== 0)) {
+      changes(new DiffEdit(currentPath, lhs, rhs));
+    } else if (ltype === 'object' && lhs !== null && rhs !== null) {
+      stack = stack || [];
+      if (stack.indexOf(lhs) < 0) {
+        stack.push(lhs);
+        if (Array.isArray(lhs)) {
+          var i, len = lhs.length;
+          for (i = 0; i < lhs.length; i++) {
+            if (i >= rhs.length) {
+              changes(new DiffArray(currentPath, i, new DiffDeleted(undefined, lhs[i])));
+            } else {
+              deepDiff(lhs[i], rhs[i], changes, prefilter, currentPath, i, stack);
+            }
+          }
+          while (i < rhs.length) {
+            changes(new DiffArray(currentPath, i, new DiffNew(undefined, rhs[i++])));
+          }
+        } else {
+          var akeys = Object.keys(lhs);
+          var pkeys = Object.keys(rhs);
+          akeys.forEach(function(k, i) {
+            var other = pkeys.indexOf(k);
+            if (other >= 0) {
+              deepDiff(lhs[k], rhs[k], changes, prefilter, currentPath, k, stack);
+              pkeys = arrayRemove(pkeys, other);
+            } else {
+              deepDiff(lhs[k], undefined, changes, prefilter, currentPath, k, stack);
+            }
+          });
+          pkeys.forEach(function(k) {
+            deepDiff(undefined, rhs[k], changes, prefilter, currentPath, k, stack);
+          });
+        }
+        stack.length = stack.length - 1;
+      }
+    } else if (lhs !== rhs) {
+      if (!(ltype === 'number' && isNaN(lhs) && isNaN(rhs))) {
+        changes(new DiffEdit(currentPath, lhs, rhs));
+      }
+    }
+  }
+
+  function accumulateDiff(lhs, rhs, prefilter, accum) {
+    accum = accum || [];
+    deepDiff(lhs, rhs,
+      function(diff) {
+        if (diff) {
+          accum.push(diff);
+        }
+      },
+      prefilter);
+    return (accum.length) ? accum : undefined;
+  }
+
+  function applyArrayChange(arr, index, change) {
+    if (change.path && change.path.length) {
+      var it = arr[index],
+          i, u = change.path.length - 1;
+      for (i = 0; i < u; i++) {
+        it = it[change.path[i]];
+      }
+      switch (change.kind) {
+        case 'A':
+          applyArrayChange(it[change.path[i]], change.index, change.item);
+          break;
+        case 'D':
+          delete it[change.path[i]];
+          break;
+        case 'E':
+        case 'N':
+          it[change.path[i]] = change.rhs;
+          break;
+      }
+    } else {
+      switch (change.kind) {
+        case 'A':
+          applyArrayChange(arr[index], change.index, change.item);
+          break;
+        case 'D':
+          arr = arrayRemove(arr, index);
+          break;
+        case 'E':
+        case 'N':
+          arr[index] = change.rhs;
+          break;
+      }
+    }
+    return arr;
+  }
+
+  function applyChange(target, source, change) {
+    if (target && source && change && change.kind) {
+      var it = target,
+          i = -1,
+          last = change.path ? change.path.length - 1 : 0;
+      while (++i < last) {
+        if (typeof it[change.path[i]] === 'undefined') {
+          it[change.path[i]] = (typeof change.path[i] === 'number') ? [] : {};
+        }
+        it = it[change.path[i]];
+      }
+      switch (change.kind) {
+        case 'A':
+          applyArrayChange(change.path ? it[change.path[i]] : it, change.index, change.item);
+          break;
+        case 'D':
+          delete it[change.path[i]];
+          break;
+        case 'E':
+        case 'N':
+          it[change.path[i]] = change.rhs;
+          break;
+      }
+    }
+  }
+
+  function revertArrayChange(arr, index, change) {
+    if (change.path && change.path.length) {
+      // the structure of the object at the index has changed...
+      var it = arr[index],
+          i, u = change.path.length - 1;
+      for (i = 0; i < u; i++) {
+        it = it[change.path[i]];
+      }
+      switch (change.kind) {
+        case 'A':
+          revertArrayChange(it[change.path[i]], change.index, change.item);
+          break;
+        case 'D':
+          it[change.path[i]] = change.lhs;
+          break;
+        case 'E':
+          it[change.path[i]] = change.lhs;
+          break;
+        case 'N':
+          delete it[change.path[i]];
+          break;
+      }
+    } else {
+      // the array item is different...
+      switch (change.kind) {
+        case 'A':
+          revertArrayChange(arr[index], change.index, change.item);
+          break;
+        case 'D':
+          arr[index] = change.lhs;
+          break;
+        case 'E':
+          arr[index] = change.lhs;
+          break;
+        case 'N':
+          arr = arrayRemove(arr, index);
+          break;
+      }
+    }
+    return arr;
+  }
+
+  function revertChange(target, source, change) {
+    if (target && source && change && change.kind) {
+      var it = target,
+          i, u;
+      u = change.path.length - 1;
+      for (i = 0; i < u; i++) {
+        if (typeof it[change.path[i]] === 'undefined') {
+          it[change.path[i]] = {};
+        }
+        it = it[change.path[i]];
+      }
+      switch (change.kind) {
+        case 'A':
+          // Array was modified...
+          // it will be an array...
+          revertArrayChange(it[change.path[i]], change.index, change.item);
+          break;
+        case 'D':
+          // Item was deleted...
+          it[change.path[i]] = change.lhs;
+          break;
+        case 'E':
+          // Item was edited...
+          it[change.path[i]] = change.lhs;
+          break;
+        case 'N':
+          // Item is new...
+          delete it[change.path[i]];
+          break;
+      }
+    }
+  }
+
+  function applyDiff(target, source, filter) {
+    if (target && source) {
+      var onChange = function(change) {
+        if (!filter || filter(target, source, change)) {
+          applyChange(target, source, change);
+        }
+      };
+      deepDiff(target, source, onChange);
+    }
+  }
+
+  Object.defineProperties(accumulateDiff, {
+
+    diff: {
+      value: accumulateDiff,
+      enumerable: true
+    },
+    observableDiff: {
+      value: deepDiff,
+      enumerable: true
+    },
+    applyDiff: {
+      value: applyDiff,
+      enumerable: true
+    },
+    applyChange: {
+      value: applyChange,
+      enumerable: true
+    },
+    revertChange: {
+      value: revertChange,
+      enumerable: true
+    },
+    isConflict: {
+      value: function() {
+        return 'undefined' !== typeof conflict;
+      },
+      enumerable: true
+    },
+    noConflict: {
+      value: function() {
+        if (conflictResolution) {
+          conflictResolution.forEach(function(it) {
+            it();
+          });
+          conflictResolution = null;
+        }
+        return accumulateDiff;
+      },
+      enumerable: true
+    }
+  });
+
+  return accumulateDiff;
+}));
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],16:[function(require,module,exports){
+(function (global){
+/**
+ * lodash (Custom Build) <https://lodash.com/>
+ * Build: `lodash modularize exports="npm" -o ./`
+ * Copyright jQuery Foundation and other contributors <https://jquery.org/>
+ * Released under MIT license <https://lodash.com/license>
+ * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
+ */
+
+/** Used as the `TypeError` message for "Functions" methods. */
+var FUNC_ERROR_TEXT = 'Expected a function';
+
+/** Used as references for various `Number` constants. */
+var NAN = 0 / 0;
+
+/** `Object#toString` result references. */
+var symbolTag = '[object Symbol]';
+
+/** Used to match leading and trailing whitespace. */
+var reTrim = /^\s+|\s+$/g;
+
+/** Used to detect bad signed hexadecimal string values. */
+var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
+
+/** Used to detect binary string values. */
+var reIsBinary = /^0b[01]+$/i;
+
+/** Used to detect octal string values. */
+var reIsOctal = /^0o[0-7]+$/i;
+
+/** Built-in method references without a dependency on `root`. */
+var freeParseInt = parseInt;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var objectToString = objectProto.toString;
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeMax = Math.max,
+    nativeMin = Math.min;
+
+/**
+ * Gets the timestamp of the number of milliseconds that have elapsed since
+ * the Unix epoch (1 January 1970 00:00:00 UTC).
+ *
+ * @static
+ * @memberOf _
+ * @since 2.4.0
+ * @category Date
+ * @returns {number} Returns the timestamp.
+ * @example
+ *
+ * _.defer(function(stamp) {
+ *   console.log(_.now() - stamp);
+ * }, _.now());
+ * // => Logs the number of milliseconds it took for the deferred invocation.
+ */
+var now = function() {
+  return root.Date.now();
+};
+
+/**
+ * Creates a debounced function that delays invoking `func` until after `wait`
+ * milliseconds have elapsed since the last time the debounced function was
+ * invoked. The debounced function comes with a `cancel` method to cancel
+ * delayed `func` invocations and a `flush` method to immediately invoke them.
+ * Provide `options` to indicate whether `func` should be invoked on the
+ * leading and/or trailing edge of the `wait` timeout. The `func` is invoked
+ * with the last arguments provided to the debounced function. Subsequent
+ * calls to the debounced function return the result of the last `func`
+ * invocation.
+ *
+ * **Note:** If `leading` and `trailing` options are `true`, `func` is
+ * invoked on the trailing edge of the timeout only if the debounced function
+ * is invoked more than once during the `wait` timeout.
+ *
+ * If `wait` is `0` and `leading` is `false`, `func` invocation is deferred
+ * until to the next tick, similar to `setTimeout` with a timeout of `0`.
+ *
+ * See [David Corbacho's article](https://css-tricks.com/debouncing-throttling-explained-examples/)
+ * for details over the differences between `_.debounce` and `_.throttle`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Function
+ * @param {Function} func The function to debounce.
+ * @param {number} [wait=0] The number of milliseconds to delay.
+ * @param {Object} [options={}] The options object.
+ * @param {boolean} [options.leading=false]
+ *  Specify invoking on the leading edge of the timeout.
+ * @param {number} [options.maxWait]
+ *  The maximum time `func` is allowed to be delayed before it's invoked.
+ * @param {boolean} [options.trailing=true]
+ *  Specify invoking on the trailing edge of the timeout.
+ * @returns {Function} Returns the new debounced function.
+ * @example
+ *
+ * // Avoid costly calculations while the window size is in flux.
+ * jQuery(window).on('resize', _.debounce(calculateLayout, 150));
+ *
+ * // Invoke `sendMail` when clicked, debouncing subsequent calls.
+ * jQuery(element).on('click', _.debounce(sendMail, 300, {
+ *   'leading': true,
+ *   'trailing': false
+ * }));
+ *
+ * // Ensure `batchLog` is invoked once after 1 second of debounced calls.
+ * var debounced = _.debounce(batchLog, 250, { 'maxWait': 1000 });
+ * var source = new EventSource('/stream');
+ * jQuery(source).on('message', debounced);
+ *
+ * // Cancel the trailing debounced invocation.
+ * jQuery(window).on('popstate', debounced.cancel);
+ */
+function debounce(func, wait, options) {
+  var lastArgs,
+      lastThis,
+      maxWait,
+      result,
+      timerId,
+      lastCallTime,
+      lastInvokeTime = 0,
+      leading = false,
+      maxing = false,
+      trailing = true;
+
+  if (typeof func != 'function') {
+    throw new TypeError(FUNC_ERROR_TEXT);
+  }
+  wait = toNumber(wait) || 0;
+  if (isObject(options)) {
+    leading = !!options.leading;
+    maxing = 'maxWait' in options;
+    maxWait = maxing ? nativeMax(toNumber(options.maxWait) || 0, wait) : maxWait;
+    trailing = 'trailing' in options ? !!options.trailing : trailing;
+  }
+
+  function invokeFunc(time) {
+    var args = lastArgs,
+        thisArg = lastThis;
+
+    lastArgs = lastThis = undefined;
+    lastInvokeTime = time;
+    result = func.apply(thisArg, args);
+    return result;
+  }
+
+  function leadingEdge(time) {
+    // Reset any `maxWait` timer.
+    lastInvokeTime = time;
+    // Start the timer for the trailing edge.
+    timerId = setTimeout(timerExpired, wait);
+    // Invoke the leading edge.
+    return leading ? invokeFunc(time) : result;
+  }
+
+  function remainingWait(time) {
+    var timeSinceLastCall = time - lastCallTime,
+        timeSinceLastInvoke = time - lastInvokeTime,
+        result = wait - timeSinceLastCall;
+
+    return maxing ? nativeMin(result, maxWait - timeSinceLastInvoke) : result;
+  }
+
+  function shouldInvoke(time) {
+    var timeSinceLastCall = time - lastCallTime,
+        timeSinceLastInvoke = time - lastInvokeTime;
+
+    // Either this is the first call, activity has stopped and we're at the
+    // trailing edge, the system time has gone backwards and we're treating
+    // it as the trailing edge, or we've hit the `maxWait` limit.
+    return (lastCallTime === undefined || (timeSinceLastCall >= wait) ||
+      (timeSinceLastCall < 0) || (maxing && timeSinceLastInvoke >= maxWait));
+  }
+
+  function timerExpired() {
+    var time = now();
+    if (shouldInvoke(time)) {
+      return trailingEdge(time);
+    }
+    // Restart the timer.
+    timerId = setTimeout(timerExpired, remainingWait(time));
+  }
+
+  function trailingEdge(time) {
+    timerId = undefined;
+
+    // Only invoke if we have `lastArgs` which means `func` has been
+    // debounced at least once.
+    if (trailing && lastArgs) {
+      return invokeFunc(time);
+    }
+    lastArgs = lastThis = undefined;
+    return result;
+  }
+
+  function cancel() {
+    if (timerId !== undefined) {
+      clearTimeout(timerId);
+    }
+    lastInvokeTime = 0;
+    lastArgs = lastCallTime = lastThis = timerId = undefined;
+  }
+
+  function flush() {
+    return timerId === undefined ? result : trailingEdge(now());
+  }
+
+  function debounced() {
+    var time = now(),
+        isInvoking = shouldInvoke(time);
+
+    lastArgs = arguments;
+    lastThis = this;
+    lastCallTime = time;
+
+    if (isInvoking) {
+      if (timerId === undefined) {
+        return leadingEdge(lastCallTime);
+      }
+      if (maxing) {
+        // Handle invocations in a tight loop.
+        timerId = setTimeout(timerExpired, wait);
+        return invokeFunc(lastCallTime);
+      }
+    }
+    if (timerId === undefined) {
+      timerId = setTimeout(timerExpired, wait);
+    }
+    return result;
+  }
+  debounced.cancel = cancel;
+  debounced.flush = flush;
+  return debounced;
+}
+
+/**
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an object, else `false`.
+ * @example
+ *
+ * _.isObject({});
+ * // => true
+ *
+ * _.isObject([1, 2, 3]);
+ * // => true
+ *
+ * _.isObject(_.noop);
+ * // => true
+ *
+ * _.isObject(null);
+ * // => false
+ */
+function isObject(value) {
+  var type = typeof value;
+  return !!value && (type == 'object' || type == 'function');
+}
+
 /**
  * Checks if `value` is object-like. A value is object-like if it's not `null`
  * and has a `typeof` result of "object".
@@ -3974,11 +5134,263 @@ function isObjectLike(value) {
   return !!value && typeof value == 'object';
 }
 
+/**
+ * Checks if `value` is classified as a `Symbol` primitive or object.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
+ * @example
+ *
+ * _.isSymbol(Symbol.iterator);
+ * // => true
+ *
+ * _.isSymbol('abc');
+ * // => false
+ */
+function isSymbol(value) {
+  return typeof value == 'symbol' ||
+    (isObjectLike(value) && objectToString.call(value) == symbolTag);
+}
+
+/**
+ * Converts `value` to a number.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to process.
+ * @returns {number} Returns the number.
+ * @example
+ *
+ * _.toNumber(3.2);
+ * // => 3.2
+ *
+ * _.toNumber(Number.MIN_VALUE);
+ * // => 5e-324
+ *
+ * _.toNumber(Infinity);
+ * // => Infinity
+ *
+ * _.toNumber('3.2');
+ * // => 3.2
+ */
+function toNumber(value) {
+  if (typeof value == 'number') {
+    return value;
+  }
+  if (isSymbol(value)) {
+    return NAN;
+  }
+  if (isObject(value)) {
+    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
+    value = isObject(other) ? (other + '') : other;
+  }
+  if (typeof value != 'string') {
+    return value === 0 ? value : +value;
+  }
+  value = value.replace(reTrim, '');
+  var isBinary = reIsBinary.test(value);
+  return (isBinary || reIsOctal.test(value))
+    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
+    : (reIsBadHex.test(value) ? NAN : +value);
+}
+
+module.exports = debounce;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],17:[function(require,module,exports){
+var root = require('./_root');
+
+/** Built-in value references. */
+var Symbol = root.Symbol;
+
+module.exports = Symbol;
+
+},{"./_root":24}],18:[function(require,module,exports){
+var Symbol = require('./_Symbol'),
+    getRawTag = require('./_getRawTag'),
+    objectToString = require('./_objectToString');
+
+/** `Object#toString` result references. */
+var nullTag = '[object Null]',
+    undefinedTag = '[object Undefined]';
+
+/** Built-in value references. */
+var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+
+/**
+ * The base implementation of `getTag` without fallbacks for buggy environments.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the `toStringTag`.
+ */
+function baseGetTag(value) {
+  if (value == null) {
+    return value === undefined ? undefinedTag : nullTag;
+  }
+  return (symToStringTag && symToStringTag in Object(value))
+    ? getRawTag(value)
+    : objectToString(value);
+}
+
+module.exports = baseGetTag;
+
+},{"./_Symbol":17,"./_getRawTag":21,"./_objectToString":22}],19:[function(require,module,exports){
+(function (global){
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+module.exports = freeGlobal;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],20:[function(require,module,exports){
+var overArg = require('./_overArg');
+
+/** Built-in value references. */
+var getPrototype = overArg(Object.getPrototypeOf, Object);
+
+module.exports = getPrototype;
+
+},{"./_overArg":23}],21:[function(require,module,exports){
+var Symbol = require('./_Symbol');
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var nativeObjectToString = objectProto.toString;
+
+/** Built-in value references. */
+var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+
+/**
+ * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the raw `toStringTag`.
+ */
+function getRawTag(value) {
+  var isOwn = hasOwnProperty.call(value, symToStringTag),
+      tag = value[symToStringTag];
+
+  try {
+    value[symToStringTag] = undefined;
+    var unmasked = true;
+  } catch (e) {}
+
+  var result = nativeObjectToString.call(value);
+  if (unmasked) {
+    if (isOwn) {
+      value[symToStringTag] = tag;
+    } else {
+      delete value[symToStringTag];
+    }
+  }
+  return result;
+}
+
+module.exports = getRawTag;
+
+},{"./_Symbol":17}],22:[function(require,module,exports){
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var nativeObjectToString = objectProto.toString;
+
+/**
+ * Converts `value` to a string using `Object.prototype.toString`.
+ *
+ * @private
+ * @param {*} value The value to convert.
+ * @returns {string} Returns the converted string.
+ */
+function objectToString(value) {
+  return nativeObjectToString.call(value);
+}
+
+module.exports = objectToString;
+
+},{}],23:[function(require,module,exports){
+/**
+ * Creates a unary function that invokes `func` with its argument transformed.
+ *
+ * @private
+ * @param {Function} func The function to wrap.
+ * @param {Function} transform The argument transform.
+ * @returns {Function} Returns the new function.
+ */
+function overArg(func, transform) {
+  return function(arg) {
+    return func(transform(arg));
+  };
+}
+
+module.exports = overArg;
+
+},{}],24:[function(require,module,exports){
+var freeGlobal = require('./_freeGlobal');
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+module.exports = root;
+
+},{"./_freeGlobal":19}],25:[function(require,module,exports){
+/**
+ * Checks if `value` is object-like. A value is object-like if it's not `null`
+ * and has a `typeof` result of "object".
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
+ * @example
+ *
+ * _.isObjectLike({});
+ * // => true
+ *
+ * _.isObjectLike([1, 2, 3]);
+ * // => true
+ *
+ * _.isObjectLike(_.noop);
+ * // => false
+ *
+ * _.isObjectLike(null);
+ * // => false
+ */
+function isObjectLike(value) {
+  return value != null && typeof value == 'object';
+}
+
 module.exports = isObjectLike;
 
-},{}],17:[function(require,module,exports){
-var getPrototype = require('./_getPrototype'),
-    isHostObject = require('./_isHostObject'),
+},{}],26:[function(require,module,exports){
+var baseGetTag = require('./_baseGetTag'),
+    getPrototype = require('./_getPrototype'),
     isObjectLike = require('./isObjectLike');
 
 /** `Object#toString` result references. */
@@ -3996,13 +5408,6 @@ var hasOwnProperty = objectProto.hasOwnProperty;
 
 /** Used to infer the `Object` constructor. */
 var objectCtorString = funcToString.call(Object);
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
 
 /**
  * Checks if `value` is a plain object, that is, an object created by the
@@ -4033,8 +5438,7 @@ var objectToString = objectProto.toString;
  * // => true
  */
 function isPlainObject(value) {
-  if (!isObjectLike(value) ||
-      objectToString.call(value) != objectTag || isHostObject(value)) {
+  if (!isObjectLike(value) || baseGetTag(value) != objectTag) {
     return false;
   }
   var proto = getPrototype(value);
@@ -4042,13 +5446,13 @@ function isPlainObject(value) {
     return true;
   }
   var Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor;
-  return (typeof Ctor == 'function' &&
-    Ctor instanceof Ctor && funcToString.call(Ctor) == objectCtorString);
+  return typeof Ctor == 'function' && Ctor instanceof Ctor &&
+    funcToString.call(Ctor) == objectCtorString;
 }
 
 module.exports = isPlainObject;
 
-},{"./_getPrototype":13,"./_isHostObject":14,"./isObjectLike":16}],18:[function(require,module,exports){
+},{"./_baseGetTag":18,"./_getPrototype":20,"./isObjectLike":25}],27:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -4230,96 +5634,170 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],19:[function(require,module,exports){
-"use strict";
+},{}],28:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
+
+exports.printBuffer = printBuffer;
+
+var _helpers = require('./helpers');
+
+var _diff = require('./diff');
+
+var _diff2 = _interopRequireDefault(_diff);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
-function _typeof(obj) { return obj && typeof Symbol !== "undefined" && obj.constructor === Symbol ? "symbol" : typeof obj; }
-
-var repeat = function repeat(str, times) {
-  return new Array(times + 1).join(str);
-};
-var pad = function pad(num, maxLength) {
-  return repeat("0", maxLength - num.toString().length) + num;
-};
-var formatTime = function formatTime(time) {
-  return "@ " + pad(time.getHours(), 2) + ":" + pad(time.getMinutes(), 2) + ":" + pad(time.getSeconds(), 2) + "." + pad(time.getMilliseconds(), 3);
-};
-
-// Use the new performance api to get better precision if available
-var timer = typeof performance !== "undefined" && typeof performance.now === "function" ? performance : Date;
-
 /**
- * parse the level option of createLogger
+ * Get log level string based on supplied params
  *
- * @property {string | function | object} level - console[level]
- * @property {object} action
- * @property {array} payload
- * @property {string} type
+ * @param {string | function | object} level - console[level]
+ * @param {object} action - selected action
+ * @param {array} payload - selected payload
+ * @param {string} type - log entry type
+ *
+ * @returns {string} level
  */
-
 function getLogLevel(level, action, payload, type) {
-  switch (typeof level === "undefined" ? "undefined" : _typeof(level)) {
-    case "object":
-      return typeof level[type] === "function" ? level[type].apply(level, _toConsumableArray(payload)) : level[type];
-    case "function":
+  switch (typeof level === 'undefined' ? 'undefined' : _typeof(level)) {
+    case 'object':
+      return typeof level[type] === 'function' ? level[type].apply(level, _toConsumableArray(payload)) : level[type];
+    case 'function':
       return level(action);
     default:
       return level;
   }
 }
 
-/**
- * Creates logger with followed options
- *
- * @namespace
- * @property {object} options - options for logger
- * @property {string | function | object} options.level - console[level]
- * @property {boolean} options.duration - print duration of each action?
- * @property {boolean} options.timestamp - print timestamp with each action?
- * @property {object} options.colors - custom colors
- * @property {object} options.logger - implementation of the `console` API
- * @property {boolean} options.logErrors - should errors in action execution be caught, logged, and re-thrown?
- * @property {boolean} options.collapsed - is group collapsed?
- * @property {boolean} options.predicate - condition which resolves logger behavior
- * @property {function} options.stateTransformer - transform state before print
- * @property {function} options.actionTransformer - transform action before print
- * @property {function} options.errorTransformer - transform error before print
- */
+function defaultTitleFormatter(options) {
+  var timestamp = options.timestamp,
+      duration = options.duration;
 
-function createLogger() {
-  var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-  var _options$level = options.level;
-  var level = _options$level === undefined ? "log" : _options$level;
-  var _options$logger = options.logger;
-  var logger = _options$logger === undefined ? console : _options$logger;
-  var _options$logErrors = options.logErrors;
-  var logErrors = _options$logErrors === undefined ? true : _options$logErrors;
-  var collapsed = options.collapsed;
-  var predicate = options.predicate;
-  var _options$duration = options.duration;
-  var duration = _options$duration === undefined ? false : _options$duration;
-  var _options$timestamp = options.timestamp;
-  var timestamp = _options$timestamp === undefined ? true : _options$timestamp;
-  var transformer = options.transformer;
-  var _options$stateTransfo = options.stateTransformer;
-  var // deprecated
-  stateTransformer = _options$stateTransfo === undefined ? function (state) {
+
+  return function (action, time, took) {
+    var parts = ['action'];
+
+    if (timestamp) parts.push('@ ' + time);
+    parts.push(String(action.type));
+    if (duration) parts.push('(in ' + took.toFixed(2) + ' ms)');
+
+    return parts.join(' ');
+  };
+}
+
+function printBuffer(buffer, options) {
+  var logger = options.logger,
+      actionTransformer = options.actionTransformer,
+      _options$titleFormatt = options.titleFormatter,
+      titleFormatter = _options$titleFormatt === undefined ? defaultTitleFormatter(options) : _options$titleFormatt,
+      collapsed = options.collapsed,
+      colors = options.colors,
+      level = options.level,
+      diff = options.diff;
+
+
+  buffer.forEach(function (logEntry, key) {
+    var started = logEntry.started,
+        startedTime = logEntry.startedTime,
+        action = logEntry.action,
+        prevState = logEntry.prevState,
+        error = logEntry.error;
+    var took = logEntry.took,
+        nextState = logEntry.nextState;
+
+    var nextEntry = buffer[key + 1];
+
+    if (nextEntry) {
+      nextState = nextEntry.prevState;
+      took = nextEntry.started - started;
+    }
+
+    // Message
+    var formattedAction = actionTransformer(action);
+    var isCollapsed = typeof collapsed === 'function' ? collapsed(function () {
+      return nextState;
+    }, action, logEntry) : collapsed;
+
+    var formattedTime = (0, _helpers.formatTime)(startedTime);
+    var titleCSS = colors.title ? 'color: ' + colors.title(formattedAction) + ';' : null;
+    var title = titleFormatter(formattedAction, formattedTime, took);
+
+    // Render
+    try {
+      if (isCollapsed) {
+        if (colors.title) logger.groupCollapsed('%c ' + title, titleCSS);else logger.groupCollapsed(title);
+      } else {
+        if (colors.title) logger.group('%c ' + title, titleCSS);else logger.group(title);
+      }
+    } catch (e) {
+      logger.log(title);
+    }
+
+    var prevStateLevel = getLogLevel(level, formattedAction, [prevState], 'prevState');
+    var actionLevel = getLogLevel(level, formattedAction, [formattedAction], 'action');
+    var errorLevel = getLogLevel(level, formattedAction, [error, prevState], 'error');
+    var nextStateLevel = getLogLevel(level, formattedAction, [nextState], 'nextState');
+
+    if (prevStateLevel) {
+      if (colors.prevState) logger[prevStateLevel]('%c prev state', 'color: ' + colors.prevState(prevState) + '; font-weight: bold', prevState);else logger[prevStateLevel]('prev state', prevState);
+    }
+
+    if (actionLevel) {
+      if (colors.action) logger[actionLevel]('%c action', 'color: ' + colors.action(formattedAction) + '; font-weight: bold', formattedAction);else logger[actionLevel]('action', formattedAction);
+    }
+
+    if (error && errorLevel) {
+      if (colors.error) logger[errorLevel]('%c error', 'color: ' + colors.error(error, prevState) + '; font-weight: bold', error);else logger[errorLevel]('error', error);
+    }
+
+    if (nextStateLevel) {
+      if (colors.nextState) logger[nextStateLevel]('%c next state', 'color: ' + colors.nextState(nextState) + '; font-weight: bold', nextState);else logger[nextStateLevel]('next state', nextState);
+    }
+
+    if (diff) {
+      (0, _diff2.default)(prevState, nextState, logger, isCollapsed);
+    }
+
+    try {
+      logger.groupEnd();
+    } catch (e) {
+      logger.log('\u2014\u2014 log end \u2014\u2014');
+    }
+  });
+}
+},{"./diff":30,"./helpers":31}],29:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = {
+  level: "log",
+  logger: console,
+  logErrors: true,
+  collapsed: undefined,
+  predicate: undefined,
+  duration: false,
+  timestamp: true,
+  stateTransformer: function stateTransformer(state) {
     return state;
-  } : _options$stateTransfo;
-  var _options$actionTransf = options.actionTransformer;
-  var actionTransformer = _options$actionTransf === undefined ? function (actn) {
-    return actn;
-  } : _options$actionTransf;
-  var _options$errorTransfo = options.errorTransformer;
-  var errorTransformer = _options$errorTransfo === undefined ? function (error) {
+  },
+  actionTransformer: function actionTransformer(action) {
+    return action;
+  },
+  errorTransformer: function errorTransformer(error) {
     return error;
-  } : _options$errorTransfo;
-  var _options$colors = options.colors;
-  var colors = _options$colors === undefined ? {
+  },
+  colors: {
     title: function title() {
-      return "#000000";
+      return "inherit";
     },
     prevState: function prevState() {
       return "#9E9E9E";
@@ -4333,11 +5811,183 @@ function createLogger() {
     error: function error() {
       return "#F20404";
     }
-  } : _options$colors;
+  },
+  diff: false,
+  diffPredicate: undefined,
 
-  // exit if console undefined
+  // Deprecated options
+  transformer: undefined
+};
+module.exports = exports["default"];
+},{}],30:[function(require,module,exports){
+'use strict';
 
-  if (typeof logger === "undefined") {
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = diffLogger;
+
+var _deepDiff = require('deep-diff');
+
+var _deepDiff2 = _interopRequireDefault(_deepDiff);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+// https://github.com/flitbit/diff#differences
+var dictionary = {
+  'E': {
+    color: '#2196F3',
+    text: 'CHANGED:'
+  },
+  'N': {
+    color: '#4CAF50',
+    text: 'ADDED:'
+  },
+  'D': {
+    color: '#F44336',
+    text: 'DELETED:'
+  },
+  'A': {
+    color: '#2196F3',
+    text: 'ARRAY:'
+  }
+};
+
+function style(kind) {
+  return 'color: ' + dictionary[kind].color + '; font-weight: bold';
+}
+
+function render(diff) {
+  var kind = diff.kind,
+      path = diff.path,
+      lhs = diff.lhs,
+      rhs = diff.rhs,
+      index = diff.index,
+      item = diff.item;
+
+
+  switch (kind) {
+    case 'E':
+      return [path.join('.'), lhs, '\u2192', rhs];
+    case 'N':
+      return [path.join('.'), rhs];
+    case 'D':
+      return [path.join('.')];
+    case 'A':
+      return [path.join('.') + '[' + index + ']', item];
+    default:
+      return [];
+  }
+}
+
+function diffLogger(prevState, newState, logger, isCollapsed) {
+  var diff = (0, _deepDiff2.default)(prevState, newState);
+
+  try {
+    if (isCollapsed) {
+      logger.groupCollapsed('diff');
+    } else {
+      logger.group('diff');
+    }
+  } catch (e) {
+    logger.log('diff');
+  }
+
+  if (diff) {
+    diff.forEach(function (elem) {
+      var kind = elem.kind;
+
+      var output = render(elem);
+
+      logger.log.apply(logger, ['%c ' + dictionary[kind].text, style(kind)].concat(_toConsumableArray(output)));
+    });
+  } else {
+    logger.log('\u2014\u2014 no diff \u2014\u2014');
+  }
+
+  try {
+    logger.groupEnd();
+  } catch (e) {
+    logger.log('\u2014\u2014 diff end \u2014\u2014 ');
+  }
+}
+module.exports = exports['default'];
+},{"deep-diff":15}],31:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+var repeat = exports.repeat = function repeat(str, times) {
+  return new Array(times + 1).join(str);
+};
+
+var pad = exports.pad = function pad(num, maxLength) {
+  return repeat("0", maxLength - num.toString().length) + num;
+};
+
+var formatTime = exports.formatTime = function formatTime(time) {
+  return pad(time.getHours(), 2) + ":" + pad(time.getMinutes(), 2) + ":" + pad(time.getSeconds(), 2) + "." + pad(time.getMilliseconds(), 3);
+};
+
+// Use performance API if it's available in order to get better precision
+var timer = exports.timer = typeof performance !== "undefined" && performance !== null && typeof performance.now === "function" ? performance : Date;
+},{}],32:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+var _core = require('./core');
+
+var _helpers = require('./helpers');
+
+var _defaults = require('./defaults');
+
+var _defaults2 = _interopRequireDefault(_defaults);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * Creates logger with following options
+ *
+ * @namespace
+ * @param {object} options - options for logger
+ * @param {string | function | object} options.level - console[level]
+ * @param {boolean} options.duration - print duration of each action?
+ * @param {boolean} options.timestamp - print timestamp with each action?
+ * @param {object} options.colors - custom colors
+ * @param {object} options.logger - implementation of the `console` API
+ * @param {boolean} options.logErrors - should errors in action execution be caught, logged, and re-thrown?
+ * @param {boolean} options.collapsed - is group collapsed?
+ * @param {boolean} options.predicate - condition which resolves logger behavior
+ * @param {function} options.stateTransformer - transform state before print
+ * @param {function} options.actionTransformer - transform action before print
+ * @param {function} options.errorTransformer - transform error before print
+ *
+ * @returns {function} logger middleware
+ */
+function createLogger() {
+  var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+  var loggerOptions = _extends({}, _defaults2.default, options);
+
+  var logger = loggerOptions.logger,
+      transformer = loggerOptions.transformer,
+      stateTransformer = loggerOptions.stateTransformer,
+      errorTransformer = loggerOptions.errorTransformer,
+      predicate = loggerOptions.predicate,
+      logErrors = loggerOptions.logErrors,
+      diffPredicate = loggerOptions.diffPredicate;
+
+  // Return if 'console' object is not defined
+
+  if (typeof logger === 'undefined') {
     return function () {
       return function (next) {
         return function (action) {
@@ -4348,94 +5998,29 @@ function createLogger() {
   }
 
   if (transformer) {
-    console.error("Option 'transformer' is deprecated, use stateTransformer instead");
+    console.error('Option \'transformer\' is deprecated, use \'stateTransformer\' instead!'); // eslint-disable-line no-console
   }
 
   var logBuffer = [];
-  function printBuffer() {
-    logBuffer.forEach(function (logEntry, key) {
-      var started = logEntry.started;
-      var startedTime = logEntry.startedTime;
-      var action = logEntry.action;
-      var prevState = logEntry.prevState;
-      var error = logEntry.error;
-      var took = logEntry.took;
-      var nextState = logEntry.nextState;
-
-      var nextEntry = logBuffer[key + 1];
-      if (nextEntry) {
-        nextState = nextEntry.prevState;
-        took = nextEntry.started - started;
-      }
-      // message
-      var formattedAction = actionTransformer(action);
-      var isCollapsed = typeof collapsed === "function" ? collapsed(function () {
-        return nextState;
-      }, action) : collapsed;
-
-      var formattedTime = formatTime(startedTime);
-      var titleCSS = colors.title ? "color: " + colors.title(formattedAction) + ";" : null;
-      var title = "action " + (timestamp ? formattedTime : "") + " " + formattedAction.type + " " + (duration ? "(in " + took.toFixed(2) + " ms)" : "");
-
-      // render
-      try {
-        if (isCollapsed) {
-          if (colors.title) logger.groupCollapsed("%c " + title, titleCSS);else logger.groupCollapsed(title);
-        } else {
-          if (colors.title) logger.group("%c " + title, titleCSS);else logger.group(title);
-        }
-      } catch (e) {
-        logger.log(title);
-      }
-
-      var prevStateLevel = getLogLevel(level, formattedAction, [prevState], "prevState");
-      var actionLevel = getLogLevel(level, formattedAction, [formattedAction], "action");
-      var errorLevel = getLogLevel(level, formattedAction, [error, prevState], "error");
-      var nextStateLevel = getLogLevel(level, formattedAction, [nextState], "nextState");
-
-      if (prevStateLevel) {
-        if (colors.prevState) logger[prevStateLevel]("%c prev state", "color: " + colors.prevState(prevState) + "; font-weight: bold", prevState);else logger[prevStateLevel]("prev state", prevState);
-      }
-
-      if (actionLevel) {
-        if (colors.action) logger[actionLevel]("%c action", "color: " + colors.action(formattedAction) + "; font-weight: bold", formattedAction);else logger[actionLevel]("action", formattedAction);
-      }
-
-      if (error && errorLevel) {
-        if (colors.error) logger[errorLevel]("%c error", "color: " + colors.error(error, prevState) + "; font-weight: bold", error);else logger[errorLevel]("error", error);
-      }
-
-      if (nextStateLevel) {
-        if (colors.nextState) logger[nextStateLevel]("%c next state", "color: " + colors.nextState(nextState) + "; font-weight: bold", nextState);else logger[nextStateLevel]("next state", nextState);
-      }
-
-      try {
-        logger.groupEnd();
-      } catch (e) {
-        logger.log("—— log end ——");
-      }
-    });
-    logBuffer.length = 0;
-  }
 
   return function (_ref) {
     var getState = _ref.getState;
     return function (next) {
       return function (action) {
-        // exit early if predicate function returns false
-        if (typeof predicate === "function" && !predicate(getState, action)) {
+        // Exit early if predicate function returns 'false'
+        if (typeof predicate === 'function' && !predicate(getState, action)) {
           return next(action);
         }
 
         var logEntry = {};
         logBuffer.push(logEntry);
 
-        logEntry.started = timer.now();
+        logEntry.started = _helpers.timer.now();
         logEntry.startedTime = new Date();
         logEntry.prevState = stateTransformer(getState());
         logEntry.action = action;
 
-        var returnedValue = undefined;
+        var returnedValue = void 0;
         if (logErrors) {
           try {
             returnedValue = next(action);
@@ -4446,10 +6031,13 @@ function createLogger() {
           returnedValue = next(action);
         }
 
-        logEntry.took = timer.now() - logEntry.started;
+        logEntry.took = _helpers.timer.now() - logEntry.started;
         logEntry.nextState = stateTransformer(getState());
 
-        printBuffer();
+        var diff = loggerOptions.diff && typeof diffPredicate === 'function' ? diffPredicate(getState, action) : loggerOptions.diff;
+
+        (0, _core.printBuffer)(logBuffer, _extends({}, loggerOptions, { diff: diff }));
+        logBuffer.length = 0;
 
         if (logEntry.error) throw logEntry.error;
         return returnedValue;
@@ -4458,8 +6046,9 @@ function createLogger() {
   };
 }
 
-module.exports = createLogger;
-},{}],20:[function(require,module,exports){
+exports.default = createLogger;
+module.exports = exports['default'];
+},{"./core":28,"./defaults":29,"./helpers":31}],33:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4518,7 +6107,7 @@ function applyMiddleware() {
     };
   };
 }
-},{"./compose":23}],21:[function(require,module,exports){
+},{"./compose":36}],34:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4570,8 +6159,7 @@ function bindActionCreators(actionCreators, dispatch) {
   }
   return boundActionCreators;
 }
-},{}],22:[function(require,module,exports){
-(function (process){
+},{}],35:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -4659,7 +6247,7 @@ function combineReducers(reducers) {
   for (var i = 0; i < reducerKeys.length; i++) {
     var key = reducerKeys[i];
 
-    if (process.env.NODE_ENV !== 'production') {
+    if ("development" !== 'production') {
       if (typeof reducers[key] === 'undefined') {
         (0, _warning2['default'])('No reducer provided for key "' + key + '"');
       }
@@ -4671,7 +6259,7 @@ function combineReducers(reducers) {
   }
   var finalReducerKeys = Object.keys(finalReducers);
 
-  if (process.env.NODE_ENV !== 'production') {
+  if ("development" !== 'production') {
     var unexpectedKeyCache = {};
   }
 
@@ -4690,7 +6278,7 @@ function combineReducers(reducers) {
       throw sanityError;
     }
 
-    if (process.env.NODE_ENV !== 'production') {
+    if ("development" !== 'production') {
       var warningMessage = getUnexpectedStateShapeWarningMessage(state, finalReducers, action, unexpectedKeyCache);
       if (warningMessage) {
         (0, _warning2['default'])(warningMessage);
@@ -4714,8 +6302,7 @@ function combineReducers(reducers) {
     return hasChanged ? nextState : state;
   };
 }
-}).call(this,require('_process'))
-},{"./createStore":24,"./utils/warning":26,"_process":18,"lodash/isPlainObject":17}],23:[function(require,module,exports){
+},{"./createStore":37,"./utils/warning":39,"lodash/isPlainObject":26}],36:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -4754,7 +6341,7 @@ function compose() {
     }, last.apply(undefined, arguments));
   };
 }
-},{}],24:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -5016,8 +6603,7 @@ function createStore(reducer, preloadedState, enhancer) {
     replaceReducer: replaceReducer
   }, _ref2[_symbolObservable2['default']] = observable, _ref2;
 }
-},{"lodash/isPlainObject":17,"symbol-observable":27}],25:[function(require,module,exports){
-(function (process){
+},{"lodash/isPlainObject":26,"symbol-observable":40}],38:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -5055,7 +6641,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'd
 */
 function isCrushed() {}
 
-if (process.env.NODE_ENV !== 'production' && typeof isCrushed.name === 'string' && isCrushed.name !== 'isCrushed') {
+if ("development" !== 'production' && typeof isCrushed.name === 'string' && isCrushed.name !== 'isCrushed') {
   (0, _warning2['default'])('You are currently using minified code outside of NODE_ENV === \'production\'. ' + 'This means that you are running a slower development build of Redux. ' + 'You can use loose-envify (https://github.com/zertosh/loose-envify) for browserify ' + 'or DefinePlugin for webpack (http://stackoverflow.com/questions/30030031) ' + 'to ensure you have the correct code for your production build.');
 }
 
@@ -5064,8 +6650,7 @@ exports.combineReducers = _combineReducers2['default'];
 exports.bindActionCreators = _bindActionCreators2['default'];
 exports.applyMiddleware = _applyMiddleware2['default'];
 exports.compose = _compose2['default'];
-}).call(this,require('_process'))
-},{"./applyMiddleware":20,"./bindActionCreators":21,"./combineReducers":22,"./compose":23,"./createStore":24,"./utils/warning":26,"_process":18}],26:[function(require,module,exports){
+},{"./applyMiddleware":33,"./bindActionCreators":34,"./combineReducers":35,"./compose":36,"./createStore":37,"./utils/warning":39}],39:[function(require,module,exports){
 'use strict';
 
 exports.__esModule = true;
@@ -5091,15 +6676,15 @@ function warning(message) {
   } catch (e) {}
   /* eslint-enable no-empty */
 }
-},{}],27:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 module.exports = require('./lib/index');
 
-},{"./lib/index":28}],28:[function(require,module,exports){
+},{"./lib/index":41}],41:[function(require,module,exports){
 (function (global){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
-	value: true
+  value: true
 });
 
 var _ponyfill = require('./ponyfill');
@@ -5108,18 +6693,25 @@ var _ponyfill2 = _interopRequireDefault(_ponyfill);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
 
-var root = undefined; /* global window */
+var root; /* global window */
 
-if (typeof global !== 'undefined') {
-	root = global;
+
+if (typeof self !== 'undefined') {
+  root = self;
 } else if (typeof window !== 'undefined') {
-	root = window;
+  root = window;
+} else if (typeof global !== 'undefined') {
+  root = global;
+} else if (typeof module !== 'undefined') {
+  root = module;
+} else {
+  root = Function('return this')();
 }
 
 var result = (0, _ponyfill2['default'])(root);
 exports['default'] = result;
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./ponyfill":29}],29:[function(require,module,exports){
+},{"./ponyfill":42}],42:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -5143,4 +6735,4 @@ function symbolObservablePonyfill(root) {
 
 	return result;
 };
-},{}]},{},[7]);
+},{}]},{},[9]);

@@ -24,6 +24,7 @@
     "babelify": "^7.3.0",
     "browserify": "^13.0.1",
     "diffhtml-inline-transitions": "^1.1.0",
+    "lodash.debounce": "^4.0.8",
     "mocha": "^2.5.3",
     "watchify": "^3.7.0"
   },
