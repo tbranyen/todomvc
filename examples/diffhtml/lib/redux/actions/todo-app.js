@@ -9,49 +9,49 @@ export const TOGGLE_ALL = 'TOGGLE_ALL';
 export function addTodo(title) {
 	return {
 		type: ADD_TODO,
-		title
+		title,
 	};
 }
 
-export function removeTodo(index) {
+export function removeTodo(key) {
 	return {
 		type: REMOVE_TODO,
-		index
+		key,
 	};
 }
 
-export function toggleCompletion(index, completed) {
+export function toggleCompletion(key, completed) {
 	return {
 		type: TOGGLE_COMPLETION,
-		index,
-		completed
+		key,
+		completed,
 	};
 }
 
-export function startEditing(index) {
+export function startEditing(key) {
 	return {
 		type: START_EDITING,
-		index
+		key,
 	};
 }
 
-export function stopEditing(index, title) {
+export function stopEditing(key, title) {
 	return {
 		type: STOP_EDITING,
-		index,
-		title
+		key,
+		title,
 	};
 }
 
 export function clearCompleted() {
 	return {
-		type: CLEAR_COMPLETED
+		type: CLEAR_COMPLETED,
 	};
 }
 
 export function toggleAll(completed) {
 	return {
 		type: TOGGLE_ALL,
-		completed
+		completed,
 	};
 }
