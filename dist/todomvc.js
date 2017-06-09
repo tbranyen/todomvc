@@ -3175,8 +3175,11 @@ var TodoApp = function (_Component) {
         "class": "main"
       }, [createTree('#text', null, "\n            "), createTree("input", defineProperty({
         "class": "toggle-all",
+        "id": "toggle-all",
         "type": "checkbox"
-      }, this.setCheckedState(), this.setCheckedState()), []), createTree('#text', null, "\n\n            "), createTree("ul", {
+      }, this.setCheckedState(), this.setCheckedState()), []), createTree('#text', null, "\n            "), createTree("label", {
+        "for": "toggle-all"
+      }, [createTree('#text', null, "Mark all as complete")]), createTree('#text', null, "\n\n            "), createTree("ul", {
         "class": "todo-list"
       }, [createTree('#text', null, "\n              "), createTree(renderTodoList, {
         "stopEditing": this.stopEditing,
