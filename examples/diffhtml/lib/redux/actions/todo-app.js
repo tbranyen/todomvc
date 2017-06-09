@@ -9,14 +9,14 @@ export const TOGGLE_ALL = 'TOGGLE_ALL';
 export function addTodo(title) {
 	return {
 		type: ADD_TODO,
-		title,
+		title
 	};
 }
 
 export function removeTodo(key) {
 	return {
 		type: REMOVE_TODO,
-		key,
+		key
 	};
 }
 
@@ -24,14 +24,14 @@ export function toggleCompletion(key, completed) {
 	return {
 		type: TOGGLE_COMPLETION,
 		key,
-		completed,
+		completed
 	};
 }
 
 export function startEditing(key) {
 	return {
 		type: START_EDITING,
-		key,
+		key
 	};
 }
 
@@ -39,19 +39,19 @@ export function stopEditing(key, title) {
 	return {
 		type: STOP_EDITING,
 		key,
-		title,
+		title
 	};
 }
 
 export function clearCompleted() {
 	return {
-		type: CLEAR_COMPLETED,
+		type: CLEAR_COMPLETED
 	};
 }
 
 export function toggleAll(completed) {
 	return {
 		type: TOGGLE_ALL,
-		completed,
+		completed
 	};
 }

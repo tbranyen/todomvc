@@ -5,8 +5,8 @@ const { assign } = Object;
 // Generates good-enough-for-a-demo keys using uuidv4.
 const uuidv4 = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
 const uuid = () => uuidv4.replace(/[xy]/g, c => {
-	const r = Math.random()*16|0;
-	return (c == 'x' ? r : r&0x3|0x8).toString(16);
+	const r = Math.random() * 16 | 0;
+	return (c == 'x' ? r : r & 0x3 | 0x8).toString(16);
 });
 
 // Persists todos to localStorage and
@@ -36,14 +36,14 @@ export default function todoApp(state = initialState, action) {
 					editing: false,
 
 					title: action.title.trim(),
-					key: uuid(),
+					key: uuid()
 				}),
 			});
 		}
 
 		case todoAppActions.REMOVE_TODO: {
 			return assign({}, state, {
-				todos: state.todos.filter(todo => todo.key !== action.key),
+				todos: state.todos.filter(todo => todo.key !== action.key)
 			});
 		}
 
@@ -52,11 +52,11 @@ export default function todoApp(state = initialState, action) {
 			const todo = state.todos[index];
 
 			state.todos[index] = assign({}, todo, {
-				completed: action.completed,
+				completed: action.completed
 			});
 
 			return assign({}, state, {
-				todos: [...state.todos],
+				todos: [...state.todos]
 			});
 		}
 
@@ -65,11 +65,11 @@ export default function todoApp(state = initialState, action) {
 			const todo = state.todos[index];
 
 			state.todos[index] = assign({}, todo, {
-				editing: true,
+				editing: true
 			});
 
 			return assign({}, state, {
-				todos: [...state.todos],
+				todos: [...state.todos]
 			});
 		}
 
@@ -83,7 +83,7 @@ export default function todoApp(state = initialState, action) {
 			});
 
 			return assign({}, state, {
-				todos: [...state.todos],
+				todos: [...state.todos]
 			});
 		}
 
@@ -106,4 +106,3 @@ export default function todoApp(state = initialState, action) {
 		}
 	}
 }
-

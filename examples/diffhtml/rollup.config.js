@@ -15,24 +15,24 @@ export const entry = 'lib/index.js';
 export const sourceMap = false;
 
 export const targets = [{
-  dest: 'dist/todomvc.js',
-  format: 'umd',
+	dest: 'dist/todomvc.js',
+	format: 'umd'
 }];
 
 export const plugins = [
-  NODE_ENV === 'production' && replace({
-    'process.env.NODE_ENV': JSON.stringify('production'),
-  }),
-  NODE_ENV === 'production' && ignore(['prop-types']),
-  alias({
-    Paths: {
-      'diffhtml': './node_modules/diffhtml/dist/es/runtime',
-    },
-    Extensions: ['js'],
-  }),
-  babel(),
-  buble(),
-  nodeResolve({ jsnext: true }),
-  commonjs(),
-  Visualizer({ filename: './dist/build-size.html' }),
+	NODE_ENV === 'production' && replace({
+		'process.env.NODE_ENV': JSON.stringify('production'),
+	}),
+	NODE_ENV === 'production' && ignore(['prop-types']),
+	alias({
+		Paths: {
+			'diffhtml': './node_modules/diffhtml/dist/es/runtime',
+		},
+		Extensions: ['js'],
+	}),
+	babel(),
+	buble(),
+	nodeResolve({ jsnext: true }),
+	commonjs(),
+	Visualizer({ filename: './dist/build-size.html' })
 ];

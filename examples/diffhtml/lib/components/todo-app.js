@@ -90,7 +90,7 @@ export default class TodoApp extends Component {
 	}
 
 	static propTypes = {
-		reducer: PropTypes.string.isRequired,
+		reducer: PropTypes.string.isRequired
 	}
 
 	constructor(props) {
@@ -220,7 +220,7 @@ export default class TodoApp extends Component {
 				// Mock the submit handler.
 				this.onSubmitHandler(Object.assign({}, ev, {
 					preventDefault: () => ev.preventDefault(),
-					target: ev.target.parentNode,
+					target: ev.target.parentNode
 				}));
 
 				break;
