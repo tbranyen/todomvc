@@ -787,7 +787,7 @@ function syncTree(oldTree, newTree, patches) {
 
         if (_vTree.key) {
           map.set(_vTree.key, _vTree);
-        } else {}
+        }
       }
     }
   }
@@ -1161,6 +1161,8 @@ var removeAttribute = function removeAttribute(domNode, name) {
   }
 };
 
+var blacklist = new Set();
+
 function patchNode(patches) {
   var state = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -1181,7 +1183,6 @@ function patchNode(patches) {
       var value = decodeEntities(SET_ATTRIBUTE[i + 2]);
 
       var domNode = createNode(vTree, ownerDocument, isSVG);
-      var attributeChanged = TransitionCache.get('attributeChanged');
       var oldValue = domNode.getAttribute(_name);
       var newPromises = runTransitions('attributeChanged', domNode, _name, oldValue, value);
 
@@ -1196,12 +1197,18 @@ function patchNode(patches) {
       // Normal attribute value.
       if (!isObject && !isFunction && name) {
         var noValue = value === null || value === undefined;
+        // Runtime checking if the property can be set.
+        var blacklistName = vTree.nodeName + '-' + name;
 
-        // Allow the user to find the real value in the DOM Node as a
-        // property.
-        try {
-          domNode[name] = value;
-        } catch (unhandledException) {}
+        // If the property has not been blacklisted then use try/catch to try
+        // and set it.
+        if (!blacklist.has(blacklistName)) {
+          try {
+            domNode[name] = value;
+          } catch (unhandledException) {
+            blacklist.add(blacklistName);
+          }
+        }
 
         // Set the actual attribute, this will ensure attributes like
         // `autofocus` aren't reset by the property call above.
@@ -1410,12 +1417,12 @@ function patch(transaction) {
       patches = transaction.patches;
   var _transaction$promises = transaction.promises,
       promises = _transaction$promises === undefined ? [] : _transaction$promises;
+  var _domNode$namespaceURI = domNode.namespaceURI,
+      namespaceURI = _domNode$namespaceURI === undefined ? '' : _domNode$namespaceURI,
+      nodeName = domNode.nodeName;
 
-  // Is the root SVG?
 
-  state.isSVG = transaction.oldTree.nodeName === 'svg';
-
-  // Set the ownerDocument.
+  state.isSVG = nodeName.toLowerCase() === 'svg' || namespaceURI.includes('svg');
   state.ownerDocument = domNode.ownerDocument || document;
 
   measure('patch node');
@@ -1954,6 +1961,10 @@ function componentDidUnmount(oldTree) {
 
 function reactLikeComponentTask(transaction) {
   return transaction.onceEnded(function () {
+    if (transaction.aborted) {
+      return;
+    }
+
     var patches = transaction.patches;
 
     if (patches.TREE_OPS && patches.TREE_OPS.length) {
@@ -1988,17 +1999,19 @@ function reactLikeComponentTask(transaction) {
 }
 
 reactLikeComponentTask.syncTreeHook = function (oldTree, newTree) {
+  var oldChildNodes = oldTree && oldTree.childNodes;
+
   // Stateful components have a very limited API, designed to be fully
   // implemented by a higher-level abstraction. The only method ever called is
   // `render`. It is up to a higher level abstraction on how to handle the
   // changes.
   for (var i = 0; i < newTree.childNodes.length; i++) {
-    var oldChild = oldTree && oldTree.childNodes && oldTree.childNodes[i];
     var newChild = newTree.childNodes[i];
 
     // If incoming tree is a component, flatten down to tree for now.
     if (newChild && typeof newChild.rawNodeName === 'function') {
       var newCtor = newChild.rawNodeName;
+      var oldChild = oldChildNodes && oldChildNodes[i];
       var oldInstanceCache = InstanceCache.get(oldChild);
       var children = newChild.childNodes;
       var props = assign$4({}, newChild.attributes, { children: children });
@@ -2017,14 +2030,19 @@ reactLikeComponentTask.syncTreeHook = function (oldTree, newTree) {
         if (oldInstance.shouldComponentUpdate()) {
           renderTree = oldInstance.render(props, oldInstance.state);
         }
+      } else if (instance && instance.render) {
+        renderTree = createTree(instance.render(props, instance.state));
       } else {
-        renderTree = createTree(instance && instance.render ? instance.render(props, instance.state) : newCtor(props));
+        renderTree = createTree(newCtor(props));
       }
 
+      // Nothing was rendered so continue.
       if (!renderTree) {
         continue;
       }
 
+      // Replace the rendered value into the new tree, if rendering a fragment
+      // this will inject the contents into the parent.
       if (renderTree.nodeType === 11) {
         newTree.childNodes = [].concat( renderTree.childNodes );
 
@@ -2032,20 +2050,21 @@ reactLikeComponentTask.syncTreeHook = function (oldTree, newTree) {
           ComponentTreeCache.set(instance, oldTree);
           InstanceCache.set(oldTree, instance);
         }
-      } else {
-        // Build a new tree from the render, and use this as the current tree.
-        newTree.childNodes[i] = renderTree;
-
-        if (instance) {
-          ComponentTreeCache.set(instance, renderTree);
-          InstanceCache.set(renderTree, instance);
-        }
       }
+      // If the rendered value is a single element use it as the root for
+      // diffing.
+      else {
+          newTree.childNodes[i] = renderTree;
 
-      // Recursively update trees.
-      return newTree;
+          if (instance) {
+            ComponentTreeCache.set(instance, renderTree);
+            InstanceCache.set(renderTree, instance);
+          }
+        }
     }
   }
+
+  return newTree;
 };
 
 var lifecycleHooks = {
@@ -3117,29 +3136,85 @@ var stopPropagation = function stopPropagation(ev) {
 };
 
 function renderTodoList(props) {
+	var _vtree = createTree('#text', null, "\n\t\t\t"),
+	    _vtree2 = createTree('#text', null, "\n\t\t\t\t"),
+	    _vtree3 = createTree('#text', null, "\n\t\t\t\t"),
+	    _vtree4 = createTree('#text', null, "\n\t\t\t\t"),
+	    _vtree5 = createTree('#text', null, "\n\t\t\t"),
+	    _vtree6 = createTree('#text', null, "\n\n\t\t\t"),
+	    _vtree7 = createTree('#text', null, "\n\t\t\t\t"),
+	    _vtree8 = createTree('#text', null, "\n\t\t\t"),
+	    _vtree9 = createTree('#text', null, "\n\t\t");
+
 	return props.todos.map(function (todo) {
 		return createTree("li", {
 			"key": todo.key,
 			"class": props.getTodoClassNames(todo)
-		}, [createTree('#text', null, "\n\t\t\t"), createTree("div", {
+		}, [_vtree, createTree("div", {
 			"class": "view"
-		}, [createTree('#text', null, "\n\t\t\t\t"), createTree("input", defineProperty({
+		}, [_vtree2, createTree("input", defineProperty({
 			"onclick": stopPropagation,
 			"class": "toggle",
 			"type": "checkbox"
-		}, todo.completed && 'checked', todo.completed && 'checked'), []), createTree('#text', null, "\n\t\t\t\t"), createTree("label", {}, [todo.title]), createTree('#text', null, "\n\t\t\t\t"), createTree("button", {
+		}, todo.completed && 'checked', todo.completed && 'checked'), []), _vtree3, createTree("label", {}, [todo.title]), _vtree4, createTree("button", {
 			"class": "destroy"
-		}, []), createTree('#text', null, "\n\t\t\t")]), createTree('#text', null, "\n\n\t\t\t"), createTree("form", {
+		}, []), _vtree5]), _vtree6, createTree("form", {
 			"class": "edit-todo"
-		}, [createTree('#text', null, "\n\t\t\t\t"), createTree("input", {
+		}, [_vtree7, createTree("input", {
 			"onblur": props.stopEditing,
 			"value": todo.title,
 			"class": "edit"
-		}, []), createTree('#text', null, "\n\t\t\t")]), createTree('#text', null, "\n\t\t")]);
+		}, []), _vtree8]), _vtree9]);
 	});
 }
 
 var TodoApp = function (_Component) {
+  var _vtree = createTree('#text', null, "\n\n        "),
+      _vtree2 = createTree('#text', null, "\n          "),
+      _vtree3 = createTree('#text', null, "todos"),
+      _vtree4 = createTree('#text', null, "\n\n          "),
+      _vtree5 = createTree('#text', null, "\n            "),
+      _vtree6 = createTree('#text', null, "\n          "),
+      _vtree7 = createTree('#text', null, "\n        "),
+      _vtree8 = createTree('#text', null, "\n\n      "),
+      _vtree9 = createTree('#text', null, "\n        "),
+      _vtree10 = createTree('#text', null, "Double-click to edit a todo"),
+      _vtree11 = createTree('#text', null, "\n\n        "),
+      _vtree12 = createTree('#text', null, "\n          Created by "),
+      _vtree13 = createTree('#text', null, "Tim Branyen"),
+      _vtree14 = createTree('#text', null, "\n          using "),
+      _vtree15 = createTree('#text', null, "diffHTML 1.0"),
+      _vtree16 = createTree('#text', null, "\n        "),
+      _vtree17 = createTree('#text', null, "\n\n        "),
+      _vtree18 = createTree('#text', null, "Part of "),
+      _vtree19 = createTree('#text', null, "TodoMVC"),
+      _vtree20 = createTree('#text', null, "\n      "),
+      _vtree21 = createTree('#text', null, "\n            "),
+      _vtree22 = createTree('#text', null, "\n            "),
+      _vtree23 = createTree('#text', null, "Mark all as complete"),
+      _vtree24 = createTree('#text', null, "\n\n            "),
+      _vtree25 = createTree('#text', null, "\n              "),
+      _vtree26 = createTree('#text', null, "\n            }"),
+      _vtree27 = createTree('#text', null, "\n          "),
+      _vtree28 = createTree('#text', null, "\n\n          "),
+      _vtree29 = createTree('#text', null, "\n            "),
+      _vtree30 = createTree('#text', null, "\n              "),
+      _vtree31 = createTree('#text', null, "\n\n            "),
+      _vtree32 = createTree('#text', null, "\n              "),
+      _vtree33 = createTree('#text', null, "\n                "),
+      _vtree34 = createTree('#text', null, "All"),
+      _vtree35 = createTree('#text', null, "\n              "),
+      _vtree36 = createTree('#text', null, "\n              "),
+      _vtree37 = createTree('#text', null, "\n                "),
+      _vtree38 = createTree('#text', null, "Active"),
+      _vtree39 = createTree('#text', null, "\n              "),
+      _vtree40 = createTree('#text', null, "\n              "),
+      _vtree41 = createTree('#text', null, "\n                "),
+      _vtree42 = createTree('#text', null, "Completed"),
+      _vtree43 = createTree('#text', null, "\n              "),
+      _vtree44 = createTree('#text', null, "\n            "),
+      _vtree45 = createTree('#text', null, "Clear completed");
+
   inherits(TodoApp, _Component);
   createClass(TodoApp, [{
     key: 'render',
@@ -3163,55 +3238,55 @@ var TodoApp = function (_Component) {
         "onkeydown": this.handleKeyDown,
         "ondblclick": this.startEditing,
         "onchange": this.toggleCompletion
-      }, [createTree('#text', null, "\n\n        "), createTree("header", {
+      }, [_vtree, createTree("header", {
         "class": "header"
-      }, [createTree('#text', null, "\n          "), createTree("h1", {}, [createTree('#text', null, "todos")]), createTree('#text', null, "\n\n          "), createTree("form", {
+      }, [_vtree2, createTree("h1", {}, [_vtree3]), _vtree4, createTree("form", {
         "class": "add-todo"
-      }, [createTree('#text', null, "\n            "), createTree("input", {
+      }, [_vtree5, createTree("input", {
         "class": "new-todo",
         "placeholder": "What needs to be done?",
         "autofocus": ""
-      }, []), createTree('#text', null, "\n          ")]), createTree('#text', null, "\n        ")]), allTodos.length && [createTree("section", {
+      }, []), _vtree6]), _vtree7]), allTodos.length && [createTree("section", {
         "class": "main"
-      }, [createTree('#text', null, "\n            "), createTree("input", defineProperty({
+      }, [_vtree21, createTree("input", defineProperty({
         "class": "toggle-all",
         "id": "toggle-all",
         "type": "checkbox"
-      }, this.setCheckedState(), this.setCheckedState()), []), createTree('#text', null, "\n            "), createTree("label", {
+      }, this.setCheckedState(), this.setCheckedState()), []), _vtree22, createTree("label", {
         "for": "toggle-all"
-      }, [createTree('#text', null, "Mark all as complete")]), createTree('#text', null, "\n\n            "), createTree("ul", {
+      }, [_vtree23]), _vtree24, createTree("ul", {
         "class": "todo-list"
-      }, [createTree('#text', null, "\n              "), createTree(renderTodoList, {
+      }, [_vtree25, createTree(renderTodoList, {
         "stopEditing": this.stopEditing,
         "getTodoClassNames": this.getTodoClassNames,
         "todos": todos
-      }, []), createTree('#text', null, "\n            }")]), createTree('#text', null, "\n          ")]), createTree('#text', null, "\n\n          "), createTree("footer", {
+      }, []), _vtree26]), _vtree27]), _vtree28, createTree("footer", {
         "class": "footer"
-      }, [createTree('#text', null, "\n            "), createTree("span", {
+      }, [_vtree29, createTree("span", {
         "class": "todo-count"
-      }, [createTree('#text', null, "\n              "), createTree("strong", {}, [String(activeTodos.length)]), createTree('#document-fragment', null, [activeTodos.length == 1 ? ' item' : ' items', createTree('#text', ' left\n            ')])]), createTree('#text', null, "\n\n            "), createTree("ul", {
+      }, [_vtree30, createTree("strong", {}, [String(activeTodos.length)]), createTree('#document-fragment', null, [activeTodos.length == 1 ? ' item' : ' items', createTree('#text', ' left\n            ')])]), _vtree31, createTree("ul", {
         "class": "filters"
-      }, [createTree('#text', null, "\n              "), createTree("li", {}, [createTree('#text', null, "\n                "), createTree("a", {
+      }, [_vtree32, createTree("li", {}, [_vtree33, createTree("a", {
         "href": "#/",
         "class": this.getNavClass('/')
-      }, [createTree('#text', null, "All")]), createTree('#text', null, "\n              ")]), createTree('#text', null, "\n              "), createTree("li", {}, [createTree('#text', null, "\n                "), createTree("a", {
+      }, [_vtree34]), _vtree35]), _vtree36, createTree("li", {}, [_vtree37, createTree("a", {
         "href": "#/active",
         "class": this.getNavClass('/active')
-      }, [createTree('#text', null, "Active")]), createTree('#text', null, "\n              ")]), createTree('#text', null, "\n              "), createTree("li", {}, [createTree('#text', null, "\n                "), createTree("a", {
+      }, [_vtree38]), _vtree39]), _vtree40, createTree("li", {}, [_vtree41, createTree("a", {
         "href": "#/completed",
         "class": this.getNavClass('/completed')
-      }, [createTree('#text', null, "Completed")]), createTree('#text', null, "\n              ")]), createTree('#text', null, "\n            ")]), completedTodos.length && createTree("button", {
+      }, [_vtree42]), _vtree43]), _vtree44]), completedTodos.length && createTree("button", {
         "class": "clear-completed",
         "onclick": this.clearCompleted
-      }, [createTree('#text', null, "Clear completed")])])]]), createTree('#text', null, "\n\n      "), createTree("footer", {
+      }, [_vtree45])])]]), _vtree8, createTree("footer", {
         "class": "info"
-      }, [createTree('#text', null, "\n        "), createTree("p", {}, [createTree('#text', null, "Double-click to edit a todo")]), createTree('#text', null, "\n\n        "), createTree("p", {}, [createTree('#text', null, "\n          Created by "), createTree("a", {
+      }, [_vtree9, createTree("p", {}, [_vtree10]), _vtree11, createTree("p", {}, [_vtree12, createTree("a", {
         "href": "http://github.com/tbranyen"
-      }, [createTree('#text', null, "Tim Branyen")]), createTree('#text', null, "\n          using "), createTree("a", {
+      }, [_vtree13]), _vtree14, createTree("a", {
         "href": "http://diffhtml.org"
-      }, [createTree('#text', null, "diffHTML 1.0")]), createTree('#text', null, "\n        ")]), createTree('#text', null, "\n\n        "), createTree("p", {}, [createTree('#text', null, "Part of "), createTree("a", {
+      }, [_vtree15]), _vtree16]), _vtree17, createTree("p", {}, [_vtree18, createTree("a", {
         "href": "http://todomvc.com"
-      }, [createTree('#text', null, "TodoMVC")])]), createTree('#text', null, "\n      ")])];
+      }, [_vtree19])]), _vtree20])];
     }
   }]);
 
